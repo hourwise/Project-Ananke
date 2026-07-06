@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "isolatedModules": true,
+    "paths": {
+      "@ananke/schema": ["./packages/schema/src/index.ts"],
+      "@ananke/approval-bind": ["./packages/approval-bind/src/index.ts"],
+      "@ananke/gateway": ["./packages/gateway/src/index.ts"],
+      "@ananke/testbench/mock-server": ["./packages/testbench/src/mock-server.ts"]
+    }
+  }
+}
