@@ -88,6 +88,17 @@ describe('Gateway — Risky Write (Test 2)', () => {
     expect(result.approvalRequired).toBe(true);
     expect(result.approvalGrantId).toBeDefined();
   });
+
+  it('returns WAITING_FOR_APPROVAL state, not DENIED', async () => {
+    const result = await gw.execute('gmail.send_email', {
+      to: 'bob@example.com',
+      subject: 'Update',
+      body: 'Here is the update.',
+    });
+    expect(result.outcome.state).toBe('WAITING_FOR_APPROVAL');
+    expect(result.outcome.reasonCode).toBe('APPROVAL_REQUIRED');
+    expect(result.outcome.retryable).toBe(true);
+  });
 });
 
 describe('Gateway — Approval Binding (Tests 3 & 4)', () => {
@@ -132,6 +143,84 @@ describe('Gateway — Policy Deny (Test 6)', () => {
     expect(result.outcome.state).toBe('DENIED');
     expect(result.outcome.reasonCode).toBe('POLICY_DENIED');
     expect(result.outcome.retryable).toBe(false);
+  });
+});
+
+describe('Gateway — Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs APPROVAL_INVALIDATED', () => {
+  it('DENIED is final and non-retryable — agents must not retry', async () => {
+    const gw = createGateway();
+    const result = await gw.execute('dangerous_unknown_tool', {});
+    expect(result.outcome.state).toBe('DENIED');
+    expect(result.outcome.reasonCode).toBe('POLICY_DENIED');
+    expect(result.outcome.retryable).toBe(false);
+    expect(result.outcome.safeToContinue).toBe(false);
+    expect(result.approvalRequired).toBeUndefined();
+    expect(result.approvalGrantId).toBeUndefined();
+  });
+
+  it('WAITING_FOR_APPROVAL is recoverable — agent can retry with approvalId', async () => {
+    const gw = createGateway();
+    const result = await gw.execute('gmail.send_email', {
+      to: 'bob@example.com',
+      subject: 'Update',
+      body: 'Please approve.',
+    });
+    expect(result.outcome.state).toBe('WAITING_FOR_APPROVAL');
+    expect(result.outcome.reasonCode).toBe('APPROVAL_REQUIRED');
+    expect(result.outcome.retryable).toBe(true);
+    expect(result.outcome.requiresUser).toBe(true);
+    expect(result.approvalRequired).toBe(true);
+    expect(result.approvalGrantId).toBeDefined();
+    // The grant ID lets the agent retry the exact same call
+    expect(result.outcome.nextAction).toContain(result.approvalGrantId);
+  });
+
+  it('APPROVAL_INVALIDATED means the approved content was tampered with', async () => {
+    const gw = createGateway();
+    const originalArgs = { to: 'bob@example.com', subject: 'Update', body: 'Approved body.' };
+    const modifiedArgs = { to: 'bob@example.com', subject: 'Update', body: 'Malicious body!' };
+
+    const r1 = await gw.execute('gmail.send_email', originalArgs);
+    expect(r1.outcome.state).toBe('WAITING_FOR_APPROVAL');
+
+    const r2 = await gw.execute('gmail.send_email', modifiedArgs, { approvalId: r1.approvalGrantId });
+    expect(r2.outcome.state).toBe('APPROVAL_INVALIDATED');
+    expect(r2.outcome.reasonCode).toBe('APPROVAL_HASH_MISMATCH');
+    expect(r2.outcome.retryable).toBe(false);
+    expect(r2.outcome.requiresUser).toBe(true);
+    expect(r2.approvalRequired).toBeUndefined();
+  });
+
+  it('agents can programmatically distinguish all three states', async () => {
+    const gw = createGateway();
+
+    // DENIED
+    const denied = await gw.execute('dangerous_unknown_tool', {});
+    expect(denied.outcome.state).toBe('DENIED');
+    expect(denied.outcome.retryable).toBe(false);
+    expect(denied.approvalRequired).toBeUndefined();
+
+    // WAITING_FOR_APPROVAL
+    const waiting = await gw.execute('gmail.send_email', { to: 'a@b.com', subject: 'S', body: 'B' });
+    expect(waiting.outcome.state).toBe('WAITING_FOR_APPROVAL');
+    expect(waiting.outcome.retryable).toBe(true);
+    expect(waiting.approvalRequired).toBe(true);
+    expect(waiting.approvalGrantId).toBeDefined();
+
+    // APPROVAL_INVALIDATED
+    const invalidated = await gw.execute(
+      'gmail.send_email',
+      { to: 'a@b.com', subject: 'S', body: 'Tampered!' },
+      { approvalId: waiting.approvalGrantId },
+    );
+    expect(invalidated.outcome.state).toBe('APPROVAL_INVALIDATED');
+    expect(invalidated.outcome.reasonCode).toBe('APPROVAL_HASH_MISMATCH');
+    expect(invalidated.outcome.retryable).toBe(false);
+    expect(invalidated.approvalRequired).toBeUndefined();
+
+    // All three states are distinct
+    const states = [denied.outcome.state, waiting.outcome.state, invalidated.outcome.state];
+    expect(new Set(states).size).toBe(3);
   });
 });
 

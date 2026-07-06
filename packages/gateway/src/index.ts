@@ -94,9 +94,9 @@ export class Gateway {
         this.audit.recordApprovalRequested(toolName, grant.canonicalHash, args);
         return {
           outcome: {
-            state: 'DENIED',
-            reasonCode: 'POLICY_DENIED',
-            retryable: false,
+            state: 'WAITING_FOR_APPROVAL',
+            reasonCode: 'APPROVAL_REQUIRED',
+            retryable: true,
             requiresUser: true,
             safeToContinue: false,
             nextAction: `Approval required. Re-submit with approvalId: ${grant.id}`,
