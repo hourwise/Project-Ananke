@@ -14,8 +14,10 @@ export default defineConfig({
   },
   test: {
     include: ['packages/*/src/**/*.test.ts'],
-    deps: {
-      inline: ['@ananke/schema', '@ananke/approval-bind', '@ananke/gateway'],
+    server: {
+      deps: {
+        inline: ['@ananke/schema', '@ananke/approval-bind', '@ananke/gateway'],
+      },
     },
   },
 });

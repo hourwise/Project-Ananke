@@ -15,9 +15,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@ananke/schema": "*",

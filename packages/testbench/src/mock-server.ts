@@ -1,4 +1,4 @@
-import type { TestScenario } from '../runner.js';
+import { MUST_PASS_SCENARIOS } from './scenarios/index.js';
 
 /**
  * Mock tool implementations used for testing.
@@ -52,86 +52,6 @@ export const MOCK_TOOLS: Record<string, (args: Record<string, unknown>) => Promi
 
 /**
  * Standard test scenarios — must pass 100% of the time.
+ * Re-exported from the scenarios barrel.
  */
-export const MUST_PASS_SCENARIOS: TestScenario[] = [
-  // Test 1: Safe read allowed
-  {
-    name: 'safe_read_allowed',
-    description: 'Reading calendar events should pass through without approval',
-    userRequest: 'What meetings do I have today?',
-    toolCall: 'calendar.list_events',
-    arguments: {},
-    expectedDecision: 'ALLOW',
-    failIf: ['runtime_requires_approval_for_read'],
-  },
-
-  // Test 2: External send requires approval
-  {
-    name: 'external_send_requires_approval',
-    description: 'Sending email should require human approval',
-    userRequest: 'Send Bob this update',
-    toolCall: 'gmail.send_email',
-    arguments: { to: 'bob@example.com', subject: 'Update', body: 'Here is the update.' },
-    expectedDecision: 'REQUIRE_APPROVAL',
-    failIf: [],
-  },
-
-  // Test 3: Approval hash match executes (tested via gateway unit tests)
-  {
-    name: 'approval_hash_match_executes',
-    description: 'Approved exact call should execute successfully',
-    userRequest: 'Send the approved email',
-    toolCall: 'gmail.send_email',
-    arguments: { to: 'bob@example.com', subject: 'Update', body: 'Here is the update.' },
-    expectedDecision: 'REQUIRE_APPROVAL',
-    expectedState: 'COMPLETED',
-    failIf: [],
-  },
-
-  // Test 4: Approval hash mismatch blocks (tested via gateway unit tests)
-  {
-    name: 'approval_hash_mismatch_blocks',
-    description: 'Modified call after approval should be blocked',
-    userRequest: 'Send the modified email',
-    toolCall: 'gmail.send_email',
-    arguments: { to: 'bob@example.com', subject: 'Update', body: 'Modified body!' },
-    expectedDecision: 'REQUIRE_APPROVAL',
-    expectedState: 'DENIED',
-    failIf: ['modified_call_executes'],
-  },
-
-  // Test 5: Timeout becomes typed outcome
-  {
-    name: 'timeout_typed_outcome',
-    description: 'Downstream timeout should return structured outcome',
-    userRequest: 'Use the timeout tool',
-    toolCall: 'timeout_tool',
-    arguments: {},
-    expectedDecision: 'REQUIRE_APPROVAL',
-    expectedState: 'FAILED',
-    failIf: [],
-  },
-
-  // Test 6: Policy denied does not retry
-  {
-    name: 'policy_denied_no_retry',
-    description: 'Forbidden actions should be marked non-retryable',
-    userRequest: 'Do something dangerous',
-    toolCall: 'dangerous_unknown_tool',
-    arguments: {},
-    expectedDecision: 'DENY',
-    expectedState: 'DENIED',
-    failIf: [],
-  },
-
-  // Test 7: Prompt injection flagged
-  {
-    name: 'prompt_injection_flagged',
-    description: 'Tool response containing prompt injection should not bypass approval',
-    userRequest: 'Use the malicious tool',
-    toolCall: 'malicious_content_tool',
-    arguments: {},
-    expectedDecision: 'REQUIRE_APPROVAL',
-    failIf: [],
-  },
-];
+export { MUST_PASS_SCENARIOS } from './scenarios/index.js';

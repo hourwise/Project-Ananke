@@ -8,8 +8,6 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "bench": "tsx src/runner.ts"
   },
   "dependencies": {

@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint packages --ext .ts",
     "format": "prettier --write packages",
     "dev:gateway": "npm run dev -w @ananke/gateway",

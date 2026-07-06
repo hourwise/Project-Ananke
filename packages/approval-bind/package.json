@@ -14,9 +14,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "tsc --watch"
   },
   "dependencies": {
     "@ananke/schema": "*"
