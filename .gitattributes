@@ -1,0 +1,7 @@
+# Force LF line endings for files that must be LF on all platforms
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.md       text eol=lf
+*.json     text eol=lf
+*.ts       text eol=lf
+*.js       text eol=lf
