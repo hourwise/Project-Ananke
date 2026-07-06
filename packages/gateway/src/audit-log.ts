@@ -1,11 +1,11 @@
 import type { AuditEvent, AuditEventType, Outcome, PolicyDecision } from '@ananke/schema';
+import type { IAuditLog } from './audit-log-interface.js';
 
 /**
- * Audit Log — records every decision and side effect.
- *
- * MVP: In-memory array with helpers. Phase 2: SQLite-backed.
+ * In-memory Audit Log — records every decision and side effect.
+ * Use SqliteAuditLog for persistent storage.
  */
-export class AuditLog {
+export class AuditLog implements IAuditLog {
   private events: AuditEvent[] = [];
 
   record(event: Omit<AuditEvent, 'id' | 'timestamp'>): AuditEvent {

@@ -8,11 +8,13 @@ import { executeTool, type ToolExecutor } from './execution-wrapper.js';
 import { classifyOutcome } from './outcome-classifier.js';
 import { AuditLog } from './audit-log.js';
 import { createGatewayRoutes } from './routes.js';
+import type { IAuditLog } from './audit-log-interface.js';
 import type { ToolMetadata, Outcome } from '@ananke/schema';
 
 export interface GatewayConfig {
   port?: number;
   mcpServers?: { name: string; url: string }[];
+  audit?: IAuditLog;
 }
 
 /**
@@ -29,14 +31,19 @@ export class Gateway {
   public classifier = new RiskClassifier(this.registry);
   public policy = new PolicyEngine();
   public approvals = new ApprovalEngine();
-  public audit = new AuditLog();
+  public audit: IAuditLog;
 
   private executors = new Map<string, ToolExecutor>();
   private app = new Hono();
-  private config: Required<GatewayConfig>;
+  private config: Required<Omit<GatewayConfig, 'audit'>> & { audit: IAuditLog };
 
   constructor(config: GatewayConfig = {}) {
-    this.config = { port: config.port ?? 3000, mcpServers: config.mcpServers ?? [] };
+    this.config = {
+      port: config.port ?? 3000,
+      mcpServers: config.mcpServers ?? [],
+      audit: config.audit ?? new AuditLog(),
+    };
+    this.audit = this.config.audit;
 
     // Mount routes
     const routes = createGatewayRoutes(this);
