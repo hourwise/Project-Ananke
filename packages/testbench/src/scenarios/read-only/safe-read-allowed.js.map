@@ -1,0 +1,1 @@
+{"version":3,"file":"safe-read-allowed.js","sourceRoot":"","sources":["safe-read-allowed.ts"],"names":[],"mappings":"AAEA;;GAEG;AACH,MAAM,QAAQ,GAAiB;IAC7B,IAAI,EAAE,mBAAmB;IACzB,WAAW,EAAE,8DAA8D;IAC3E,WAAW,EAAE,gCAAgC;IAC7C,QAAQ,EAAE,sBAAsB;IAChC,SAAS,EAAE,EAAE;IACb,gBAAgB,EAAE,OAAO;IACzB,MAAM,EAAE,CAAC,oCAAoC,CAAC;CAC/C,CAAC;AAEF,eAAe,QAAQ,CAAC"}

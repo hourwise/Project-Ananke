@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAuditLog } from '../src/sqlite-audit-log.js';
 import { Gateway } from '../src/index.js';
+import type { Outcome } from '@ananke/schema';
 import { unlinkSync } from 'node:fs';
 
 const TEST_DB = './test-audit.db';
+
+function okOutcome(overrides: Partial<Outcome> = {}): Outcome {
+  return { state: 'COMPLETED', retryable: false, requiresUser: false, safeToContinue: true, ...overrides };
+}
 
 describe('SqliteAuditLog', () => {
   let audit: SqliteAuditLog;
@@ -28,10 +33,10 @@ describe('SqliteAuditLog', () => {
 
     const events = audit.all();
     expect(events).toHaveLength(1);
-    expect(events[0].eventType).toBe('TOOL_CALL_REQUESTED');
-    expect(events[0].toolName).toBe('test.tool');
-    expect(events[0].serverName).toBe('test-server');
-    expect(events[0].arguments).toEqual({ key: 'value' });
+    expect(events[0]!.eventType).toBe('TOOL_CALL_REQUESTED');
+    expect(events[0]!.toolName).toBe('test.tool');
+    expect(events[0]!.serverName).toBe('test-server');
+    expect(events[0]!.arguments).toEqual({ key: 'value' });
   });
 
   it('persists across close/reopen', () => {
@@ -47,7 +52,7 @@ describe('SqliteAuditLog', () => {
   it('queries by tool name', () => {
     audit.recordToolCallRequested('tool-a', {});
     audit.recordToolCallRequested('tool-b', {});
-    audit.recordToolExecuted('tool-a', { state: 'COMPLETED' }, 42);
+    audit.recordToolExecuted('tool-a', okOutcome(), 42);
 
     expect(audit.query({ toolName: 'tool-a' })).toHaveLength(2);
     expect(audit.query({ toolName: 'tool-b' })).toHaveLength(1);
@@ -56,7 +61,7 @@ describe('SqliteAuditLog', () => {
   it('queries by event type', () => {
     audit.recordToolCallRequested('t', {});
     audit.recordPolicyChecked('t', 'ALLOW');
-    audit.recordToolExecuted('t', { state: 'COMPLETED' }, 10);
+    audit.recordToolExecuted('t', okOutcome(), 10);
 
     expect(audit.query({ eventType: 'POLICY_CHECKED' })).toHaveLength(1);
     expect(audit.query({ eventType: 'TOOL_EXECUTED' })).toHaveLength(1);
@@ -70,7 +75,7 @@ describe('SqliteAuditLog', () => {
     const limited = audit.query({ limit: 2 });
     expect(limited).toHaveLength(2);
     // Most recent first
-    expect(limited[0].arguments).toEqual({ n: 3 });
+    expect(limited[0]!.arguments).toEqual({ n: 3 });
   });
 
   it('clears all events', () => {
@@ -93,6 +98,8 @@ describe('Gateway with SqliteAuditLog', () => {
       name: 'test.tool',
       server: 'test',
       riskClass: 'READ_ONLY',
+      requiredPermissions: [],
+      retryable: false,
       requiresApproval: false,
     });
     gw.setExecutor('test.tool', async () => ({ ok: true }));

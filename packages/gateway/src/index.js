@@ -1,0 +1,135 @@
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
+import { ToolRegistry } from './registry.js';
+import { RiskClassifier } from './classifier.js';
+import { PolicyEngine } from './policy-engine.js';
+import { ApprovalEngine } from './approval-engine.js';
+import { executeTool } from './execution-wrapper.js';
+import { classifyOutcome } from './outcome-classifier.js';
+import { AuditLog } from './audit-log.js';
+import { createGatewayRoutes } from './routes.js';
+/**
+ * Ananke Outcome Gateway — the core runtime.
+ *
+ * Usage:
+ *   const gateway = new Gateway({ port: 3000 });
+ *   gateway.registerTool({ name: 'gmail.send_email', riskClass: 'EXTERNAL_SEND', ... });
+ *   gateway.setExecutor('gmail.send_email', async (args) => { ... });
+ *   gateway.start();
+ */
+export class Gateway {
+    registry = new ToolRegistry();
+    classifier = new RiskClassifier(this.registry);
+    policy = new PolicyEngine();
+    approvals = new ApprovalEngine();
+    audit;
+    executors = new Map();
+    app = new Hono();
+    config;
+    constructor(config = {}) {
+        this.config = {
+            port: config.port ?? 3000,
+            mcpServers: config.mcpServers ?? [],
+            audit: config.audit ?? new AuditLog(),
+        };
+        this.audit = this.config.audit;
+        // Mount routes
+        const routes = createGatewayRoutes(this);
+        this.app.route('/api', routes);
+        // Health check
+        this.app.get('/', (c) => c.json({ name: 'Ananke Outcome Gateway', version: '0.1.0' }));
+    }
+    registerTool(metadata) {
+        this.registry.register(metadata);
+    }
+    setExecutor(toolName, executor) {
+        this.executors.set(toolName, executor);
+    }
+    /**
+     * Execute a tool call through the full runtime pipeline:
+     * classify → policy → (approval) → execute → outcome → audit
+     */
+    async execute(toolName, args, options) {
+        const startTime = performance.now();
+        // 1. Audit: tool call requested
+        this.audit.recordToolCallRequested(toolName, args);
+        // 2. Classify risk
+        const riskClass = this.classifier.classify(toolName);
+        const metadata = this.registry.get(toolName);
+        // 3. Evaluate policy
+        const decision = this.policy.evaluate(toolName, riskClass);
+        this.audit.recordPolicyChecked(toolName, decision);
+        // 4. Handle DENY
+        if (decision === 'DENY') {
+            const outcome = classifyOutcome({ success: false, error: 'Policy denied', durationMs: 0 }, 'DENY');
+            this.audit.recordOutcomeGenerated(toolName, outcome);
+            return { outcome };
+        }
+        // 5. Handle REQUIRE_APPROVAL
+        if (decision === 'REQUIRE_APPROVAL') {
+            // If no approvalId provided, request one
+            if (!options?.approvalId) {
+                const { grant } = this.approvals.requestApproval(toolName, args);
+                this.audit.recordApprovalRequested(toolName, grant.canonicalHash, args);
+                return {
+                    outcome: {
+                        state: 'WAITING_FOR_APPROVAL',
+                        reasonCode: 'APPROVAL_REQUIRED',
+                        retryable: true,
+                        requiresUser: true,
+                        safeToContinue: false,
+                        nextAction: `Approval required. Re-submit with approvalId: ${grant.id}`,
+                    },
+                    approvalRequired: true,
+                    approvalGrantId: grant.id,
+                };
+            }
+            // Verify approval
+            const check = this.approvals.checkApproval(options.approvalId, args);
+            if (!check.valid) {
+                this.audit.recordApprovalInvalidated(toolName, options.approvalId);
+                const outcome = classifyOutcome({ success: false, error: check.reason, errorCode: 'APPROVAL_HASH_MISMATCH', durationMs: 0 });
+                this.audit.recordOutcomeGenerated(toolName, outcome);
+                return { outcome };
+            }
+            this.audit.recordApprovalGranted(toolName, options.approvalId);
+        }
+        // 6. Execute
+        const executor = this.executors.get(toolName);
+        if (!executor) {
+            const outcome = classifyOutcome({
+                success: false,
+                error: `No executor registered for tool: ${toolName}`,
+                errorCode: 'UNKNOWN_FAILURE',
+                durationMs: 0,
+            });
+            this.audit.recordOutcomeGenerated(toolName, outcome);
+            return { outcome };
+        }
+        const result = await executeTool(toolName, args, executor);
+        const outcome = classifyOutcome(result);
+        // 7. Audit
+        if (result.success) {
+            this.audit.recordToolExecuted(toolName, outcome, result.durationMs);
+        }
+        else {
+            this.audit.recordToolFailed(toolName, outcome, result.durationMs);
+        }
+        this.audit.recordOutcomeGenerated(toolName, outcome);
+        // 8. Consume approval if used
+        if (options?.approvalId) {
+            this.approvals.consume(options.approvalId);
+        }
+        const totalMs = Math.round(performance.now() - startTime);
+        if (metadata) {
+            console.log(`[ananke] ${toolName} → ${outcome.state} (${totalMs}ms)`);
+        }
+        return { outcome };
+    }
+    start() {
+        serve({ fetch: this.app.fetch, port: this.config.port }, (info) => {
+            console.log(`🔮 Ananke Outcome Gateway running on http://localhost:${info.port}`);
+        });
+    }
+}
+//# sourceMappingURL=index.js.map

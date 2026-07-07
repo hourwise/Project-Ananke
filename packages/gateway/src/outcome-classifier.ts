@@ -86,6 +86,16 @@ export function classifyOutcome(
       requiresUser: true,
       nextAction: 'Action denied by policy. Do not retry.',
     },
+    APPROVAL_REQUIRED: {
+      retryable: true,
+      requiresUser: true,
+      nextAction: 'Waiting for human approval. Retry with approvalId.',
+    },
+    APPROVAL_HASH_MISMATCH: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Approval was granted for different content. Re-request approval.',
+    },
     RESOURCE_VERSION_CHANGED: {
       retryable: true,
       requiresUser: false,

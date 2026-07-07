@@ -25,7 +25,7 @@ export class McpAdapter {
     this.transport = new StdioClientTransport({ command, args, env });
     this.client = new Client(
       { name: `ananke-gateway-${serverName}`, version: '0.1.0' },
-      { capabilities: { tools: {} } },
+      { capabilities: {} },
     );
   }
 
@@ -52,6 +52,8 @@ export class McpAdapter {
       description: tool.description ?? undefined,
       inputSchema: tool.inputSchema as Record<string, unknown> | undefined,
       riskClass: 'UNKNOWN' as const, // caller should override
+      requiredPermissions: [] as string[],
+      retryable: false,
       requiresApproval: false,       // caller should override
     }));
   }
@@ -72,22 +74,23 @@ export class McpAdapter {
       });
 
       // MCP returns content as an array of {type, text} or {type, resource}, etc.
+      const content = result.content as Array<{ type: string; text?: string }>;
       if (result.isError) {
-        const errorText = result.content
-          .map((c) => (c.type === 'text' ? c.text : JSON.stringify(c)))
+        const errorText = content
+          .map((c) => (c.type === 'text' ? (c.text ?? '') : JSON.stringify(c)))
           .join('\n');
         throw new Error(`MCP_TOOL_ERROR: ${errorText}`);
       }
 
       // Extract structured content
-      const textParts = result.content
+      const textParts = content
         .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-        .map((c) => c.text);
+        .map((c) => c.text!);
 
       // Try to parse JSON if it looks like JSON
       if (textParts.length === 1) {
         try {
-          return JSON.parse(textParts[0]);
+          return JSON.parse(textParts[0]!);
         } catch {
           return { text: textParts[0] };
         }

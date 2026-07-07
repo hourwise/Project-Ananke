@@ -1,0 +1,1 @@
+{"version":3,"file":"timeout-typed-outcome.js","sourceRoot":"","sources":["timeout-typed-outcome.ts"],"names":[],"mappings":"AAEA;;GAEG;AACH,MAAM,QAAQ,GAAiB;IAC7B,IAAI,EAAE,uBAAuB;IAC7B,WAAW,EAAE,qDAAqD;IAClE,WAAW,EAAE,sBAAsB;IACnC,QAAQ,EAAE,cAAc;IACxB,SAAS,EAAE,EAAE;IACb,gBAAgB,EAAE,kBAAkB;IACpC,aAAa,EAAE,QAAQ;IACvB,MAAM,EAAE,EAAE;CACX,CAAC;AAEF,eAAe,QAAQ,CAAC"}

@@ -9,6 +9,8 @@ function createGateway(): Gateway {
     server: 'test',
     description: 'List calendar events',
     riskClass: 'READ_ONLY',
+    requiredPermissions: [],
+    retryable: false,
     requiresApproval: false,
   });
 
@@ -17,6 +19,8 @@ function createGateway(): Gateway {
     server: 'test',
     description: 'Send an email',
     riskClass: 'EXTERNAL_SEND',
+    requiredPermissions: [],
+    retryable: false,
     requiresApproval: true,
   });
 
@@ -25,6 +29,8 @@ function createGateway(): Gateway {
     server: 'test',
     description: 'Delete a git branch',
     riskClass: 'DELETE',
+    requiredPermissions: [],
+    retryable: false,
     requiresApproval: true,
   });
 

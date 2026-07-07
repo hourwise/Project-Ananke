@@ -1,0 +1,1 @@
+{"version":3,"file":"prompt-injection-flagged.js","sourceRoot":"","sources":["prompt-injection-flagged.ts"],"names":[],"mappings":"AAEA;;GAEG;AACH,MAAM,QAAQ,GAAiB;IAC7B,IAAI,EAAE,0BAA0B;IAChC,WAAW,EAAE,sEAAsE;IACnF,WAAW,EAAE,wBAAwB;IACrC,QAAQ,EAAE,wBAAwB;IAClC,SAAS,EAAE,EAAE;IACb,gBAAgB,EAAE,kBAAkB;IACpC,MAAM,EAAE,EAAE;CACX,CAAC;AAEF,eAAe,QAAQ,CAAC"}
