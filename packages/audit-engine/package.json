@@ -2,10 +2,10 @@
   "name": "@ananke/audit-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "Pluggable audit logging — in-memory and SQLite backends",
+  "description": "Pluggable audit logging â€” in-memory and SQLite backends",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "scripts": { "build": "tsc" },
+  "scripts": { "build": "tsc --build" },
   "dependencies": { "@ananke/schema": "*", "better-sqlite3": "^11.0.0" }
 }

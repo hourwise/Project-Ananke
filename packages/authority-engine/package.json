@@ -6,6 +6,6 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "scripts": { "build": "tsc" },
+  "scripts": { "build": "tsc --build" },
   "dependencies": { "@ananke/schema": "*" }
 }
