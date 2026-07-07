@@ -6,5 +6,5 @@
     "rootDir": "./src"
   },
   "include": ["src"],
-  "references": [{ "path": "../schema" }, { "path": "../approval-bind" }, { "path": "../gateway" }]
+  "references": [{ "path": "../schema" }, { "path": "../authority-engine" }, { "path": "../runtime-core" }]
 }

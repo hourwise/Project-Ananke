@@ -15,9 +15,13 @@
     "isolatedModules": true,
     "paths": {
       "@ananke/schema": ["./packages/schema/src/index.ts"],
-      "@ananke/approval-bind": ["./packages/approval-bind/src/index.ts"],
-      "@ananke/gateway": ["./packages/gateway/src/index.ts"],
-      "@ananke/testbench/mock-server": ["./packages/testbench/src/mock-server.ts"]
+      "@ananke/authority-engine": ["./packages/authority-engine/src/index.ts"],
+      "@ananke/policy-engine": ["./packages/policy-engine/src/index.ts"],
+      "@ananke/outcome-engine": ["./packages/outcome-engine/src/index.ts"],
+      "@ananke/audit-engine": ["./packages/audit-engine/src/index.ts"],
+      "@ananke/tool-router": ["./packages/tool-router/src/index.ts"],
+      "@ananke/mcp-adapter": ["./packages/mcp-adapter/src/index.ts"],
+      "@ananke/runtime-core": ["./packages/runtime-core/src/index.ts"]
     }
   }
 }

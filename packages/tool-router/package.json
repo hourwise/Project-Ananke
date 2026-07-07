@@ -1,0 +1,11 @@
+{
+  "name": "@ananke/tool-router",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tool execution wrapper — calls tools and captures structured results",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": { "build": "tsc" },
+  "dependencies": { "@ananke/schema": "*" }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@ananke/authority-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canonical hashing, approval binding, and human approval gating",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": { "build": "tsc" },
+  "dependencies": { "@ananke/schema": "*" }
+}

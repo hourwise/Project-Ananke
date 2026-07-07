@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "lint": "eslint packages --ext .ts",
     "format": "prettier --write packages",
-    "dev:gateway": "npm run dev -w @ananke/gateway",
+    "dev:gateway": "npm run dev -w @ananke/runtime-core",
     "dev:dashboard": "npm run dev -w @ananke/dashboard",
     "test:bench": "npm run test -w @ananke/testbench"
   },

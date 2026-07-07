@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "composite": true, "outDir": "./dist", "rootDir": "./src" },
+  "include": ["src"],
+  "references": [
+    { "path": "../schema" },
+    { "path": "../authority-engine" },
+    { "path": "../policy-engine" },
+    { "path": "../outcome-engine" },
+    { "path": "../audit-engine" },
+    { "path": "../tool-router" }
+  ]
+}

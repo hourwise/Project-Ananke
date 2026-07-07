@@ -1,0 +1,11 @@
+{
+  "name": "@ananke/outcome-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Structured outcome classification — every result is typed, never raw",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": { "build": "tsc" },
+  "dependencies": { "@ananke/schema": "*", "@ananke/tool-router": "*" }
+}

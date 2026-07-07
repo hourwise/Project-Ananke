@@ -4,7 +4,7 @@
  * Run: npx tsx examples/mock-mcp-server/index.ts
  */
 
-import { Gateway } from '../../packages/gateway/src/index.js';
+import { Gateway } from '../../packages/runtime-core/src/index.js';
 import { MOCK_TOOLS } from '../../packages/testbench/src/mock-server.js';
 
 const gateway = new Gateway({ port: 3000 });

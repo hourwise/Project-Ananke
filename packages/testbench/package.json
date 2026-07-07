@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@ananke/schema": "*",
-    "@ananke/approval-bind": "*",
-    "@ananke/gateway": "*",
+    "@ananke/authority-engine": "*",
+    "@ananke/runtime-core": "*",
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
