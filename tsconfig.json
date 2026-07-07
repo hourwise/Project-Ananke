@@ -1,4 +1,15 @@
 {
+  "files": [],
+  "references": [
+    { "path": "./packages/schema" },
+    { "path": "./packages/authority-engine" },
+    { "path": "./packages/policy-engine" },
+    { "path": "./packages/tool-router" },
+    { "path": "./packages/audit-engine" },
+    { "path": "./packages/outcome-engine" },
+    { "path": "./packages/mcp-adapter" },
+    { "path": "./packages/runtime-core" }
+  ],
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
