@@ -1,65 +1,88 @@
-# Project Ananke — MCP Outcome Gateway
+# Project Ananke
 
-> A small MCP-compatible gateway that turns tool results into structured outcomes, gates risky side effects with hash-bound approval, and records an audit trail.
+> **Intelligence should never change reality without governance.**
 
-## What It Is
+Ananke is the runtime layer between AI agents and the real world. It ensures every action is authorised, auditable, and recoverable before it changes reality.
 
-Ananke wraps MCP tool calls with:
+---
 
-- **Typed Outcomes** — every tool result is a structured envelope with state, reason codes, and recovery guidance.
-- **Approval Binding** — risky actions require human approval bound to exact canonical content via SHA-256 hashing.
-- **Audit Trail** — every decision, approval, and execution is recorded.
+## Why Ananke exists
+
+MCP solved tool **access**. It did not solve tool **execution**.
+
+Today, agents receive `Success` or `Failure`. That is not enough.
+
+Ananke wraps every tool call in a structured outcome that tells the agent exactly what happened, why, and what to do next. Safe reads pass through instantly. Risky writes are gated behind hash-bound human approval. Everything is audited. Nothing fails silently.
+
+```
+MCP                                    Ananke
+────                                   ──────
+AI                                     AI
+ │                                      │
+ ▼                                      ▼
+Tool                                  Policy
+ │                                      │
+ ▼                                      ▼
+Response                             Authority
+                                       │
+                                       ▼
+                                     Approval
+                                       │
+                                       ▼
+                                     Outcome
+                                       │
+                                       ▼
+                                     Audit
+                                       │
+                                       ▼
+                                      Tool
+```
+
+---
+
+## Architecture
+
+```
+AI Client -> Ananke Gateway -> MCP Server / Tool
+                |
+        +-------+--------+
+        |       |        |
+   Registry   Policy   Approval
+        |       |        |
+        +-------+--------+
+                |
+           Audit Log
+```
+
+Ananke is built as ten focused engines, not a monolithic gateway. [Full architecture ->](docs/ARCHITECTURE.md)
+
+---
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Build all packages
 npm run build
-
-# Run the mock gateway demo
+npm test                            # 30 tests
 npx tsx examples/mock-mcp-server/index.ts
-
-# Run tests
-npm test
-
-# Start dashboard (in another terminal)
-npm run dev:dashboard
 ```
 
-## Using Ananke
-
-### Connect a Real MCP Server
-
-Ananke wraps any MCP server over stdio. Here is a complete example connecting the official filesystem server:
+The gateway starts on port 3000. Connect a real MCP server:
 
 ```ts
 import { Gateway } from "@ananke/runtime-core";
 import { McpAdapter } from "@ananke/mcp-adapter";
 
 const gateway = new Gateway({ port: 3000 });
-
-// 1. Connect to an MCP server
-const adapter = new McpAdapter(
-  "filesystem",
-  "npx",
-  ["-y", "@anthropic/mcp-server-filesystem", "/tmp"],
-);
+const adapter = new McpAdapter("filesystem", "npx",
+  ["-y", "@anthropic/mcp-server-filesystem", "/tmp"]);
 await adapter.connect();
 
-// 2. List tools and register them
-const tools = await adapter.listTools();
-for (const tool of tools) {
-  gateway.registerTool({
-    ...tool,
-    riskClass: tool.name.includes("write") || tool.name.includes("delete")
-      ? "INTERNAL_WRITE"
-      : "READ_ONLY",
-    requiresApproval: tool.name.includes("write") || tool.name.includes("delete"),
-    requiredPermissions: [],
-    retryable: false,
+for (const tool of await adapter.listTools()) {
+  gateway.registerTool({ ...tool,
+    riskClass: tool.name.includes("write") ? "INTERNAL_WRITE" : "READ_ONLY",
+    requiresApproval: tool.name.includes("write"),
+    requiredPermissions: [], retryable: false,
   });
   gateway.setExecutor(tool.name, adapter.executorFor(tool.name));
 }
@@ -67,316 +90,54 @@ for (const tool of tools) {
 gateway.start();
 ```
 
-### Agent Integration
+---
 
-An agent calling Ananke follows a simple loop. The outcome envelope tells the agent exactly what to do next:
+## Current Status
 
-```
-                    ┌─────────────────────────┐
-                    │  Agent calls Ananke     │
-                    │  POST /api/execute      │
-                    └───────────┬─────────────┘
-                                │
-                    ┌───────────▼─────────────┐
-                    │  Check outcome.state    │
-                    └───────────┬─────────────┘
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        │                       │                       │
-  COMPLETED              WAITING_FOR_APPROVAL      DENIED
-        │                       │                       │
-  Return result          Ask human to approve     Stop. Do not retry.
-  to user                Re-submit with            Reformulate or
-                         approvalId               abandon.
+**Solid prototype.** 30 tests pass across 4 test files. All 7 must-pass safety scenarios verified. Engine architecture stable. Not yet production-hardened.
 
-        │                       │
-  FAILED                  APPROVAL_INVALIDATED
-        │                       │
-  Check reasonCode.        Content was tampered.
-  Retry if retryable.      Re-request approval
-  Escalate if not.         from scratch.
-```
+| What works | What is next |
+|-----------|-------------|
+| Typed outcomes (7 states, 13 codes) | MCP adapter validation with real servers |
+| Hash-bound approval binding | Agent SDK for Claude/GPT/Gemini |
+| Deterministic policy engine | Approval action flow in dashboard |
+| SQLite + in-memory audit | Policy file loading from YAML |
+| CI (build + test on push) | Scenario benchmark in CI |
 
-**TypeScript example:**
-
-```ts
-async function agentLoop(gatewayUrl: string, tool: string, args: Record<string, unknown>) {
-  let approvalId: string | undefined;
-
-  while (true) {
-    const res = await fetch(`${gatewayUrl}/api/execute`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toolName: tool, arguments: args, approvalId }),
-    });
-    const { outcome, approvalGrantId } = await res.json();
-
-    switch (outcome.state) {
-      case "COMPLETED":
-        return outcome.data;                                                    // done
-
-      case "WAITING_FOR_APPROVAL":
-        approvalId = approvalGrantId;                                          // ask human, then loop
-        console.log(`⚠️  Approval needed: ${outcome.nextAction}`);
-        await waitForHumanApproval();                                           // your UI logic
-        break;
-
-      case "DENIED":
-        throw new Error(`Permanently denied: ${outcome.reasonCode}`);          // stop
-
-      case "APPROVAL_INVALIDATED":
-        approvalId = undefined;                                                // re-request approval
-        console.log(`🔒 Approval invalidated: ${outcome.reasonCode}`);
-        break;
-
-      case "FAILED":
-        if (outcome.retryable) {
-          console.log(`🔄 Retrying: ${outcome.nextAction}`);
-          await sleep(1000);                                                   // backoff
-          break;
-        }
-        throw new Error(`Unrecoverable failure: ${outcome.reasonCode}`);       // escalate
-    }
-  }
-}
-```
-
-### HTTP API
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/` | Health check — returns `{ name, version }` |
-| `GET` | `/api/tools` | List all registered tools with risk metadata |
-| `GET` | `/api/tools/:name` | Get a single tool metadata |
-| `POST` | `/api/execute` | Execute a tool call — `{ toolName, arguments, approvalId? }` |
-| `GET` | `/api/approvals` | List pending approval grants |
-| `GET` | `/api/audit` | Query audit log — `?toolName=&eventType=&since=&limit=` |
-| `GET` | `/api/stats` | Runtime stats — executed, failed, denied, pending approvals |
-
-### Deployment
-
-```bash
-# Build all engines
-npm run build
-
-# Start with in-memory audit (default)
-node packages/runtime-core/dist/index.js
-
-# Start with persistent SQLite audit
-ANANKE_AUDIT_DB=./audit.db node packages/runtime-core/dist/index.js
-```
-
-The gateway listens on port 3000 by default. Set `PORT` env var to override.
-
-## Engines
-
-Ananke is built as a set of focused engines, not a monolithic gateway.
-
-| Engine | Package | Purpose |
-|--------|---------|---------|
-| **Runtime Core** | `@ananke/runtime-core` | Orchestrates all engines; HTTP server, tool registry, risk classifier |
-| **Authority Engine** | `@ananke/authority-engine` | Canonical hashing, approval binding, human approval gating |
-| **Policy Engine** | `@ananke/policy-engine` | Deterministic policy evaluation by risk class |
-| **Outcome Engine** | `@ananke/outcome-engine` | Converts raw results into structured, recoverable outcomes |
-| **Audit Engine** | `@ananke/audit-engine` | Pluggable audit logging — in-memory and SQLite backends |
-| **Tool Router** | `@ananke/tool-router` | Wraps tool execution, captures typed results and errors |
-| **MCP Adapter** | `@ananke/mcp-adapter` | Stdio-based MCP client for real server connectivity |
-| **Schema** | `@ananke/schema` | Zod schemas shared across all engines |
-| **Dashboard** | `@ananke/dashboard` | React/Vite developer dashboard |
-| **Testbench** | `@ananke/testbench` | Repeated-run safety scenario test harness |
-
-## Architecture
-
-```
-AI Client → Ananke Gateway → MCP Server / Tool
-                │
-        ┌───────┼────────┐
-        │       │        │
-   Registry   Policy   Approval
-        │       │        │
-        └───────┼────────┘
-                │
-           Audit Log
-```
-
-- **Safe reads** pass through with minimal latency.
-- **Risky writes** are gated behind hash-bound approval.
-- **Failures** are always typed, never raw.
-- **Every side effect** is audited.
-
-## Key Concepts
-
-### Outcome Envelope
-
-```json
-{
-  "state": "COMPLETED",
-  "reasonCode": null,
-  "retryable": false,
-  "requiresUser": false,
-  "safeToContinue": true,
-  "data": { "events": [...] }
-}
-```
-
-### Approval Binding
-
-> Approval is not approval of intent. Approval is approval of exact canonical call content.
-
-If arguments change after approval, the hash changes and the call is blocked.
-
-### Risk Classes
-
-`READ_ONLY` → `INTERNAL_WRITE` → `EXTERNAL_SEND` → `DELETE` → `PAYMENT` → `DEPLOYMENT` → `PERMISSION_CHANGE` → `UNKNOWN`
-
-## The Laws of Ananke
-
-These seven principles define Ananke more than the code does.
-
-### Law I — Authority
-
-> **No side effect without authority.**
-
-An AI may reason freely. Reality changes only with authority.
-
-### Law II — Explainability
-
-> **Every outcome is explainable.**
-
-Nothing ever fails with `Tool failed`. Every failure must tell the agent how to recover.
-
-### Law III — Content Binding
-
-> **Approval binds to content, not intention.**
-
-Changing a single byte invalidates approval.
-
-### Law IV — Frictionless Reads
-
-> **Safe reads should be frictionless.**
-
-Don't slow down intelligence unnecessarily. Only dangerous actions require governance.
-
-### Law V — Auditability
-
-> **Everything that changes reality leaves evidence.**
-
-Every action is auditable. Forever.
-
-### Law VI — Determinism
-
-> **Policies are deterministic.**
-
-Two identical requests should never produce different decisions.
-
-### Law VII — Model Independence
-
-> **Reasoning is replaceable.**
-
-GPT. Claude. Gemini. Qwen. Whatever comes next. The runtime remains.
+[Full roadmap ->](docs/ROADMAP.md)
 
 ---
 
-## The Explanation Engine
+## Documentation
 
-Not for humans. For agents.
-
-Instead of:
-
-```
-Denied.
-```
-
-The runtime produces:
-
-```
-Reason: External email requires approval.
-Recovery: Request approval for the canonical email.
-Alternative: Save as draft.
-```
-
-That isn't an error. It's guidance — exception handling evolved for AI.
-
-Ananke's outcome envelope already delivers this: every result carries `state`, `reasonCode`, `retryable`, `requiresUser`, and `nextAction`. Agents never see raw failures.
+| Document | Content |
+|----------|---------|
+| [Architecture](docs/ARCHITECTURE.md) | Engine overview and data flow |
+| [The Laws of Ananke](docs/THE_LAWS_OF_ANANKE.md) | Seven design principles |
+| [Outcome Envelope](docs/OUTCOME_ENVELOPE.md) | States, reason codes, recovery |
+| [Approval Binding](docs/APPROVAL_BINDING.md) | Canonical hashing and security |
+| [Risk Classes](docs/RISK_CLASSES.md) | Risk levels and default policies |
+| [HTTP API](docs/HTTP_API.md) | Endpoint reference |
+| [Agent Integration](docs/AGENT_INTEGRATION.md) | Decision flow and TypeScript loop |
+| [Deployment](docs/DEPLOYMENT.md) | Build, run, SQLite audit |
+| [Vision](docs/VISION.md) | Long-term direction |
+| [Roadmap](docs/ROADMAP.md) | What is solid, in progress, next |
 
 ---
 
-## Vision
+## Community Testing
 
-The more we build this, the less it feels like software.
+Help harden Ananke. Run the testbench against your MCP setup and submit results.
 
-MCP standardised how AI connects to tools — the TCP/IP moment for tool access. Ananke aims to do the same for **actions**: a shared, predictable runtime for *what happens after the tool is called*.
+1. Fork -> run testbench -> fill [template](TEST_RESULTS_TEMPLATE.md) -> open PR
+2. Connect a real MCP server using the adapter, report what breaks
+3. Open an issue if an outcome state or recovery action is missing
+4. Pick an engine -- each is less than 200 lines and independently testable
 
-Typed outcomes. Bound approvals. Deterministic policy. Explainable failure. Auditable side effects. Model-agnostic. That's the layer we're building.
+[Submit results ->](test-results/)
 
-## MVP Success Criteria
-
-| Metric | Target |
-|--------|--------|
-| Unsafe unapproved executions | 0 |
-| Approval mutation bypasses | 0 |
-| Side-effect without audit | 0 |
-| Policy decision latency | < 50ms |
-| Audit coverage of side-effecting calls | 100% |
-
-## Community Test Results
-
-Help us harden Ananke by running the testbench against your own MCP servers and tools. We welcome results from any setup — local dev tools, production gateways, or custom MCP implementations.
-
-### How to Submit
-
-1. **Fork** this repo and run the testbench against your MCP setup.
-2. **Copy** the [`TEST_RESULTS_TEMPLATE.md`](./TEST_RESULTS_TEMPLATE.md) into a new file: `test-results/<your-github-username>.md`.
-3. **Fill in** your MCP config, tool manifest, scenario results, and any observations.
-4. **Open a PR** — we review and merge passing/interesting results.
-
-### Submitted Results
-
-| Tester | MCP Servers Tested | Scenarios Passed | Notes |
-|--------|-------------------|-------------------|-------|
-| — | — | — | *Be the first!* |
-
-See [`test-results/`](./test-results/) for all submissions.
-
-## Current Status & Roadmap
-
-**Status:** Solid prototype — 30 tests pass, all 7 must-pass safety scenarios verified. The engine architecture is stable. Not yet production-hardened.
-
-### What Is Solid
-
-| Area | State |
-|------|-------|
-| Outcome envelope | 7 typed states, 13 reason codes, recovery guidance on every failure |
-| Approval binding | SHA-256 canonical hashing, hash mismatch blocks execution |
-| Policy engine | Deterministic risk-class-based defaults, configurable per-tool |
-| Audit log | In-memory and SQLite backends, pluggable via `IAuditLog` |
-| Testbench | 7 must-pass scenarios across 5 domains, 30 unit tests |
-| CI | Build + test on push (Node 22, GitHub Actions) |
-
-### What Is In Progress
-
-| Area | Priority |
-|------|----------|
-| MCP adapter validation | Test with real MCP servers (filesystem, GitHub, Slack) |
-| Agent SDK | Client library wrapping the agent loop for Claude/GPT/Gemini |
-| Approval dashboard flow | Approve/reject from the dashboard UI |
-| Policy file loading | Load risk overrides from `ananke.policy.yaml` |
-| CI hardening | Add scenario benchmark (N runs) to CI |
-
-### How to Help
-
-1. **Run the testbench** against your MCP setup and submit results.
-2. **Connect a real MCP server** using the adapter and report what breaks.
-3. **Open an issue** if an outcome state, reason code, or recovery action is missing.
-4. **Pick an engine** — each engine is < 200 lines and independently testable.
-
-### Next Milestone
-
-End-to-end with one harmless read tool + one risky write tool via the MCP adapter, with an agent handling the full approval loop. Target: 100% scenario pass rate against a real MCP server.
+---
 
 ## License
 
 MIT
-#   P r o j e c t - A n a n k e 
- 
- 

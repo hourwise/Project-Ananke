@@ -4,45 +4,24 @@
 
 ## How It Works
 
-1. A risky tool call is proposed with specific arguments.
-2. The runtime hashes the canonical form of those arguments (SHA-256).
-3. A human reviews and approves the **exact** call content.
-4. The agent retries with the same arguments + the approval grant ID.
-5. The runtime re-hashes the arguments and compares against the stored hash.
-6. If the hashes match → execute. If they differ → block.
+1. Agent proposes a tool call with arguments
+2. If the tool requires approval, Ananke hashes the canonical form of the arguments (SHA-256, sorted keys)
+3. Human approves the **exact hash**
+4. Agent retries with the `approvalId`
+5. Ananke re-hashes the arguments and compares to the approved hash
+6. If identical -> execute. If different -> `APPROVAL_INVALIDATED`.
 
-## Canonical JSON
+## Why Canonical Hashing
 
-Arguments are serialized to deterministic JSON before hashing:
+Without canonical hashing, two identical calls might produce different hashes due to key ordering:
 
-- Object keys are sorted alphabetically.
-- No extraneous whitespace.
-- Nested objects are also key-sorted.
-
-This ensures that logically identical arguments produce the same hash regardless of key order:
-
-```typescript
-hashCanonicalCall({ name: "Alice", age: 30 })
-  === hashCanonicalCall({ age: 30, name: "Alice" })  // true
+```json
+{"to": "bob", "body": "hi"}  -> hash A
+{"body": "hi", "to": "bob"}  -> hash B  (different!)
 ```
 
-## Hash Verification
+Canonical JSON sorts keys alphabetically before hashing, so both produce the same hash.
 
-```typescript
-verifyApprovalBinding(
-  { to: "bob@example.com", body: "Approved content" },   // approved
-  { to: "bob@example.com", body: "Approved content" },   // retried
-) // → true
+## Security Property
 
-verifyApprovalBinding(
-  { to: "bob@example.com", body: "Approved content" },   // approved
-  { to: "bob@example.com", body: "Injected content" },   // retried
-) // → false
-```
-
-## Security Properties
-
-- **Content binding:** A change of even one character invalidates approval.
-- **No replay:** Each approval grant can be used only once.
-- **Expiry support:** Approvals can have expiration timestamps.
-- **Non-repudiation:** The audit log records who approved what and when.
+Changing a single byte of the approved arguments - even a space in the email body - invalidates the approval. There is no way to "slightly modify" an approved call.
