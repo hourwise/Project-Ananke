@@ -14,7 +14,8 @@
     "format": "prettier --write packages",
     "dev:gateway": "npm run dev -w @ananke/runtime-core",
     "dev:dashboard": "npm run dev -w @ananke/dashboard",
-    "test:bench": "npm run test -w @ananke/testbench"
+    "test:bench": "npm run test -w @ananke/testbench",
+    "demo:filesystem": "npm run build && npx tsx examples/filesystem-mcp-demo/index.ts"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

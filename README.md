@@ -64,8 +64,25 @@ Ananke is built as ten focused engines, not a monolithic gateway. [Full architec
 npm install
 npm run build
 npm test                            # 30 tests
+npm run demo:filesystem             # read/write approval demo over MCP stdio
 npx tsx examples/mock-mcp-server/index.ts
 ```
+
+## Filesystem MCP Demo
+
+Ananke includes a real MCP stdio demo that proves safe execution and audit for filesystem tools:
+
+1. Read file -> allowed immediately
+2. Write file -> waits for approval
+3. Exact approved write -> executes
+4. Mutated write after approval -> blocked as `APPROVAL_INVALIDATED`
+5. Every step is written to SQLite audit
+
+Run:
+
+```bash
+npm run demo:filesystem
+
 
 The gateway starts on port 3000. Connect a real MCP server:
 
