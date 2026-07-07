@@ -2,10 +2,10 @@
   "name": "@ananke/mcp-adapter",
   "version": "0.1.0",
   "private": true,
-  "description": "Stdio-based MCP client adapter â€” connects real MCP servers",
+  "description": "Stdio-based MCP client adapter Ã¢â‚¬â€ connects real MCP servers",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "scripts": { "build": "tsc --build" },
+  "scripts": { "build": "tsc" },
   "dependencies": { "@ananke/schema": "*", "@ananke/tool-router": "*", "@modelcontextprotocol/sdk": "^1.0.0" }
 }
