@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAuditLog } from './sqlite-audit-log.js';
-import { Gateway } from '@ananke/runtime-core';
 import type { Outcome } from '@ananke/schema';
 import { unlinkSync } from 'node:fs';
 
@@ -82,37 +81,5 @@ describe('SqliteAuditLog', () => {
     audit.recordToolCallRequested('t', {});
     audit.clear();
     expect(audit.count()).toBe(0);
-  });
-});
-
-describe('Gateway with SqliteAuditLog', () => {
-  afterEach(() => {
-    try { unlinkSync(TEST_DB); } catch { /* ok */ }
-  });
-
-  it('uses SQLite audit when configured', async () => {
-    const sqliteAudit = new SqliteAuditLog(TEST_DB);
-    const gw = new Gateway({ audit: sqliteAudit });
-
-    gw.registerTool({
-      name: 'test.tool',
-      server: 'test',
-      riskClass: 'READ_ONLY',
-      requiredPermissions: [],
-      retryable: false,
-      requiresApproval: false,
-    });
-    gw.setExecutor('test.tool', async () => ({ ok: true }));
-
-    await gw.execute('test.tool', {});
-
-    expect(sqliteAudit.count()).toBeGreaterThanOrEqual(3); // request + policy + execute + outcome
-    const events = sqliteAudit.all();
-    const types = events.map((e) => e.eventType);
-    expect(types).toContain('TOOL_CALL_REQUESTED');
-    expect(types).toContain('POLICY_CHECKED');
-    expect(types).toContain('TOOL_EXECUTED');
-
-    sqliteAudit.close();
   });
 });

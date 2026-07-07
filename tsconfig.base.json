@@ -16,5 +16,6 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "exclude": ["src/**/*.test.ts"]
 }

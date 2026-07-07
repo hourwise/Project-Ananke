@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "npm run build -w @ananke/schema && npm run build -w @ananke/authority-engine && npm run build -w @ananke/policy-engine && npm run build -w @ananke/tool-router && npm run build -w @ananke/audit-engine && npm run build -w @ananke/outcome-engine && npm run build -w @ananke/mcp-adapter && npm run build -w @ananke/runtime-core",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint packages --ext .ts",
