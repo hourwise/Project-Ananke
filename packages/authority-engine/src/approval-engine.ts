@@ -8,7 +8,7 @@ import {
   getApproval,
   clearApprovals,
 } from './approval-store.js';
-import type { ApprovalGrant } from '@ananke/schema';
+import type { ApprovalGrant, OperatorIdentity } from '@ananke/schema';
 
 /**
  * Approval Engine — manages the human approval queue and verification.
@@ -37,12 +37,12 @@ export class ApprovalEngine {
     return validateApproval(approvalId, proposedArgs);
   }
 
-  approve(approvalId: string, approvedBy = 'human'): ApprovalGrant | undefined {
-    return approveApproval(approvalId, approvedBy);
+  approve(approvalId: string, operator: OperatorIdentity): ApprovalGrant | undefined {
+    return approveApproval(approvalId, operator);
   }
 
-  reject(approvalId: string, rejectedBy = 'human'): ApprovalGrant | undefined {
-    return rejectApproval(approvalId, rejectedBy);
+  reject(approvalId: string, operator: OperatorIdentity): ApprovalGrant | undefined {
+    return rejectApproval(approvalId, operator);
   }
 
   get(approvalId: string): ApprovalGrant | undefined {

@@ -8,8 +8,8 @@ export interface IAuditLog {
   recordToolCallRequested(toolName: string, args: Record<string, unknown>, serverName?: string): AuditEvent;
   recordPolicyChecked(toolName: string, decision: PolicyDecision): AuditEvent;
   recordApprovalRequested(toolName: string, approvalHash: string, args: Record<string, unknown>): AuditEvent;
-  recordApprovalGranted(toolName: string, approvalHash: string): AuditEvent;
-  recordApprovalDenied(toolName: string, approvalHash: string): AuditEvent;
+  recordApprovalGranted(toolName: string, approvalHash: string, metadata?: Record<string, unknown>): AuditEvent;
+  recordApprovalDenied(toolName: string, approvalHash: string, metadata?: Record<string, unknown>): AuditEvent;
   recordApprovalInvalidated(toolName: string, approvalHash: string): AuditEvent;
   recordToolExecuted(toolName: string, outcome: Outcome, durationMs: number): AuditEvent;
   recordToolFailed(toolName: string, outcome: Outcome, durationMs: number): AuditEvent;

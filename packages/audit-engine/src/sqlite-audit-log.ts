@@ -145,12 +145,20 @@ export class SqliteAuditLog implements IAuditLog {
     return this.recordEvent({ eventType: 'APPROVAL_REQUESTED', toolName, approvalHash, arguments: args });
   }
 
-  recordApprovalGranted(toolName: string, approvalHash: string): AuditEvent {
-    return this.recordEvent({ eventType: 'APPROVAL_GRANTED', toolName, approvalHash });
+  recordApprovalGranted(
+    toolName: string,
+    approvalHash: string,
+    metadata?: Record<string, unknown>,
+  ): AuditEvent {
+    return this.recordEvent({ eventType: 'APPROVAL_GRANTED', toolName, approvalHash, metadata });
   }
 
-  recordApprovalDenied(toolName: string, approvalHash: string): AuditEvent {
-    return this.recordEvent({ eventType: 'APPROVAL_DENIED', toolName, approvalHash });
+  recordApprovalDenied(
+    toolName: string,
+    approvalHash: string,
+    metadata?: Record<string, unknown>,
+  ): AuditEvent {
+    return this.recordEvent({ eventType: 'APPROVAL_DENIED', toolName, approvalHash, metadata });
   }
 
   recordApprovalInvalidated(toolName: string, approvalHash: string): AuditEvent {

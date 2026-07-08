@@ -35,7 +35,14 @@ interface Approval {
 }
 
 const API = 'http://localhost:3000/api';
-const APPROVER = 'dashboard-session';
+const DEV_OPERATOR_TOKEN = localStorage.getItem('ananke.operatorToken') ?? 'dev-approval-token';
+const OPERATOR_SESSION_LABEL = 'local-dev-session';
+
+function authHeaders(): HeadersInit {
+  return {
+    authorization: `Bearer ${DEV_OPERATOR_TOKEN}`,
+  };
+}
 
 function App() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -46,9 +53,9 @@ function App() {
 
   async function refresh(): Promise<void> {
     const [statsRes, auditRes, approvalsRes] = await Promise.all([
-      fetch(`${API}/stats`),
-      fetch(`${API}/audit?limit=50`),
-      fetch(`${API}/approvals`),
+      fetch(`${API}/stats`, { headers: authHeaders() }),
+      fetch(`${API}/audit?limit=50`, { headers: authHeaders() }),
+      fetch(`${API}/approvals`, { headers: authHeaders() }),
     ]);
     setStats(await statsRes.json());
     setAudit(await auditRes.json());
@@ -63,14 +70,10 @@ function App() {
 
   async function decideApproval(id: string, decision: 'approve' | 'reject'): Promise<void> {
     setMessage(null);
-    const body = decision === 'approve'
-      ? { approvedBy: APPROVER }
-      : { rejectedBy: APPROVER };
 
     const response = await fetch(`${API}/approvals/${id}/${decision}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+      headers: authHeaders(),
     });
 
     if (!response.ok) {
@@ -79,7 +82,7 @@ function App() {
       return;
     }
 
-    setMessage(`Approval ${decision === 'approve' ? 'approved' : 'rejected'} by ${APPROVER}`);
+    setMessage(`Approval ${decision === 'approve' ? 'approved' : 'rejected'} by authenticated operator`);
     await refresh();
   }
 
@@ -148,7 +151,12 @@ function App() {
                   <div style={{ color: '#94a3b8', fontSize: 13 }}>
                     Requested: {new Date(approval.requestedAt).toLocaleString()}
                   </div>
-                  <div style={{ color: '#94a3b8', fontSize: 13 }}>Approving session: {APPROVER}</div>
+                  <div style={{ color: '#94a3b8', fontSize: 13 }}>
+                    Approving session: {OPERATOR_SESSION_LABEL}
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: 13 }}>
+                    Identity source: authenticated dev token
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <button style={approveBtn} onClick={() => void decideApproval(approval.id, 'approve')}>

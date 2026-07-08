@@ -10,12 +10,26 @@ import { classifyOutcome } from '@ananke/outcome-engine';
 import { AuditLog } from '@ananke/audit-engine';
 import { createGatewayRoutes } from './routes.js';
 import type { IAuditLog } from '@ananke/audit-engine';
-import type { ToolMetadata, Outcome } from '@ananke/schema';
+import type { ToolMetadata, Outcome, OperatorIdentity } from '@ananke/schema';
+
+export const DEFAULT_APPROVAL_DEV_TOKEN = 'dev-approval-token';
+
+export interface OperatorProfile {
+  operatorId: string;
+  displayName?: string;
+  sessionId?: string;
+}
+
+export interface ApprovalAuthConfig {
+  enabled?: boolean;
+  tokens?: Record<string, OperatorProfile>;
+}
 
 export interface GatewayConfig {
   port?: number;
   mcpServers?: { name: string; url: string }[];
   audit?: IAuditLog;
+  approvalAuth?: ApprovalAuthConfig;
 }
 
 /**
@@ -36,18 +50,37 @@ export class Gateway {
 
   private executors = new Map<string, ToolExecutor>();
   private app = new Hono();
-  private config: Required<Omit<GatewayConfig, 'audit'>> & { audit: IAuditLog };
+  private config: {
+    port: number;
+    mcpServers: { name: string; url: string }[];
+    audit: IAuditLog;
+    approvalAuth: Required<ApprovalAuthConfig>;
+  };
 
   constructor(config: GatewayConfig = {}) {
     this.config = {
       port: config.port ?? 3000,
       mcpServers: config.mcpServers ?? [],
       audit: config.audit ?? new AuditLog(),
+      approvalAuth: {
+        enabled: config.approvalAuth?.enabled ?? true,
+        tokens: config.approvalAuth?.tokens ?? {
+          [DEFAULT_APPROVAL_DEV_TOKEN]: {
+            operatorId: 'local-dashboard',
+            displayName: 'Local Dashboard',
+            sessionId: 'local-dev-session',
+          },
+        },
+      },
     };
     this.audit = this.config.audit;
 
     // Mount routes
-    this.app.use('/api/*', cors());
+    this.app.use('/api/*', cors({
+      allowHeaders: ['Authorization', 'Content-Type'],
+      allowMethods: ['GET', 'POST', 'OPTIONS'],
+      origin: '*',
+    }));
     const routes = createGatewayRoutes(this);
     this.app.route('/api', routes);
 
@@ -61,6 +94,32 @@ export class Gateway {
 
   setExecutor(toolName: string, executor: ToolExecutor): void {
     this.executors.set(toolName, executor);
+  }
+
+  authenticateOperator(authorizationHeader?: string): OperatorIdentity | undefined {
+    if (!this.config.approvalAuth.enabled) {
+      return {
+        operatorId: 'auth-disabled',
+        displayName: 'Auth Disabled',
+        sessionId: 'auth-disabled-session',
+        authMethod: 'dev-token',
+        authenticatedAt: new Date().toISOString(),
+      };
+    }
+
+    const match = authorizationHeader?.match(/^Bearer\s+(.+)$/i);
+    if (!match) return undefined;
+
+    const profile = this.config.approvalAuth.tokens[match[1]!.trim()];
+    if (!profile) return undefined;
+
+    return {
+      operatorId: profile.operatorId,
+      displayName: profile.displayName,
+      sessionId: profile.sessionId ?? crypto.randomUUID(),
+      authMethod: 'dev-token',
+      authenticatedAt: new Date().toISOString(),
+    };
   }
 
   /**

@@ -15,6 +15,7 @@ Ananke only governs tool calls that pass through the Ananke Gateway. If an agent
 - Unknown tools deny by default: unregistered tools are classified as `UNKNOWN` and receive `DENY` by default policy.
 - Read-only does not mean content-safe: v1 risk class is assigned by tool identity, not argument content or returned data.
 - Tool descriptions and results are untrusted: metadata and outputs can contain misleading or prompt-injection content.
+- Approval decisions require authenticated operator context: the dashboard/API must not trust `approvedBy` or `rejectedBy` from request bodies.
 
 ## Current Limitations
 
@@ -22,7 +23,7 @@ Ananke only governs tool calls that pass through the Ananke Gateway. If an agent
 - Phase 1 does not provide content-sensitive read classification.
 - Phase 1 does not provide full information-flow control.
 - Current canonical hashing is deterministic but not RFC 8785-complete.
-- Approval UI has a basic approve/reject flow; authentication, authorization, and durable operator identity are not production-hardened yet.
+- Approval UI has a local development token guard and records operator/session metadata, but production SSO, RBAC, rotation, and durable session management are not implemented yet.
 
 ## Reporting Security Issues
 

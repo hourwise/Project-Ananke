@@ -6,13 +6,20 @@ import { fileURLToPath } from 'node:url';
 import { Gateway } from '@ananke/runtime-core';
 import { SqliteAuditLog } from '@ananke/audit-engine';
 import { McpAdapter } from '@ananke/mcp-adapter';
-import type { Outcome } from '@ananke/schema';
+import type { OperatorIdentity, Outcome } from '@ananke/schema';
 
 const FILE_NAME = 'note.txt';
 const INITIAL_CONTENT = 'original file content\n';
 const APPROVED_CONTENT = 'approved write from Ananke\n';
 const SECOND_APPROVED_CONTENT = 'second approved write\n';
 const TAMPERED_CONTENT = 'tampered write after approval\n';
+const DEMO_OPERATOR: OperatorIdentity = {
+  operatorId: 'demo-human',
+  displayName: 'Demo Human',
+  sessionId: 'filesystem-demo-session',
+  authMethod: 'dev-token',
+  authenticatedAt: '2026-01-01T00:00:00.000Z',
+};
 
 function expectState(label: string, outcome: Outcome, expected: Outcome['state']): void {
   assert.equal(
@@ -26,6 +33,17 @@ function printOutcome(label: string, outcome: Outcome, approvalId?: string): voi
   const reason = outcome.reasonCode ? ` reason=${outcome.reasonCode}` : '';
   const approval = approvalId ? ` approvalId=${approvalId}` : '';
   console.log(`${label}: ${outcome.state}${reason}${approval}`);
+}
+
+function approvalMetadata(operator: OperatorIdentity): Record<string, unknown> {
+  return {
+    decision: 'approved',
+    operatorId: operator.operatorId,
+    operatorDisplayName: operator.displayName,
+    sessionId: operator.sessionId,
+    authMethod: operator.authMethod,
+    decidedAt: new Date().toISOString(),
+  };
 }
 
 async function main(): Promise<void> {
@@ -84,9 +102,9 @@ async function main(): Promise<void> {
       writeRequest.approvalGrantId,
     );
 
-    const approvedGrant = gateway.approvals.approve(writeRequest.approvalGrantId, 'demo-human');
+    const approvedGrant = gateway.approvals.approve(writeRequest.approvalGrantId, DEMO_OPERATOR);
     assert.ok(approvedGrant, 'demo-human should be able to approve the pending write');
-    gateway.audit.recordApprovalGranted(writeTool, approvedGrant.canonicalHash);
+    gateway.audit.recordApprovalGranted(writeTool, approvedGrant.canonicalHash, approvalMetadata(DEMO_OPERATOR));
     console.log('   Approved by demo-human');
 
     const approvedWrite = await gateway.execute(writeTool, writeArgs, {
@@ -102,9 +120,9 @@ async function main(): Promise<void> {
     });
     expectState('second write without approval', secondWriteRequest.outcome, 'WAITING_FOR_APPROVAL');
     assert.ok(secondWriteRequest.approvalGrantId, 'second write should return an approval id');
-    const secondGrant = gateway.approvals.approve(secondWriteRequest.approvalGrantId, 'demo-human');
+    const secondGrant = gateway.approvals.approve(secondWriteRequest.approvalGrantId, DEMO_OPERATOR);
     assert.ok(secondGrant, 'demo-human should be able to approve the second pending write');
-    gateway.audit.recordApprovalGranted(writeTool, secondGrant.canonicalHash);
+    gateway.audit.recordApprovalGranted(writeTool, secondGrant.canonicalHash, approvalMetadata(DEMO_OPERATOR));
 
     const tamperedWrite = await gateway.execute(
       writeTool,

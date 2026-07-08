@@ -44,19 +44,29 @@ export class AuditLog implements IAuditLog {
     });
   }
 
-  recordApprovalGranted(toolName: string, approvalHash: string): AuditEvent {
+  recordApprovalGranted(
+    toolName: string,
+    approvalHash: string,
+    metadata?: Record<string, unknown>,
+  ): AuditEvent {
     return this.record({
       eventType: 'APPROVAL_GRANTED',
       toolName,
       approvalHash,
+      metadata,
     });
   }
 
-  recordApprovalDenied(toolName: string, approvalHash: string): AuditEvent {
+  recordApprovalDenied(
+    toolName: string,
+    approvalHash: string,
+    metadata?: Record<string, unknown>,
+  ): AuditEvent {
     return this.record({
       eventType: 'APPROVAL_DENIED',
       toolName,
       approvalHash,
+      metadata,
     });
   }
 

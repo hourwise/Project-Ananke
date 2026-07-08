@@ -94,6 +94,17 @@ export const Outcome = z.object({
 
 export type Outcome = z.infer<typeof Outcome>;
 
+// Operator identity captured from authenticated dashboard/API context.
+export const OperatorIdentity = z.object({
+  operatorId: z.string(),
+  displayName: z.string().optional(),
+  sessionId: z.string(),
+  authMethod: z.enum(['dev-token', 'basic']),
+  authenticatedAt: z.string(),
+});
+
+export type OperatorIdentity = z.infer<typeof OperatorIdentity>;
+
 // ── Approval Grant ────────────────────────────────────────────
 
 export const ApprovalGrant = z.object({
@@ -104,8 +115,10 @@ export const ApprovalGrant = z.object({
   status: z.enum(['pending', 'approved', 'rejected']).default('pending'),
   requestedAt: z.string(),
   approvedBy: z.string().optional(),
+  approvedBySessionId: z.string().optional(),
   approvedAt: z.string().optional(),
   rejectedBy: z.string().optional(),
+  rejectedBySessionId: z.string().optional(),
   rejectedAt: z.string().optional(),
   expiresAt: z.string().optional(),
   used: z.boolean().default(false),

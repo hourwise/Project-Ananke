@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { canonicalJson, hashCanonicalCall, verifyApprovalBinding } from './canonical-hash.js';
 
+const TEST_OPERATOR = {
+  operatorId: 'tester',
+  displayName: 'Test Operator',
+  sessionId: 'test-session',
+  authMethod: 'dev-token' as const,
+  authenticatedAt: '2026-01-01T00:00:00.000Z',
+};
+
 describe('Canonical Hash', () => {
   it('produces the same hash for logically identical objects', () => {
     const a = { name: 'Alice', age: 30 };
@@ -134,9 +142,11 @@ describe('Approval Store', () => {
   it('validates an exact match', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
     approvalStore.storeApproval('test-1', 'send_email', args);
-    approvalStore.approveApproval('test-1', 'tester');
+    approvalStore.approveApproval('test-1', TEST_OPERATOR);
     const result = approvalStore.validateApproval('test-1', args);
     expect(result.valid).toBe(true);
+    expect(result.grant?.approvedBy).toBe('tester');
+    expect(result.grant?.approvedBySessionId).toBe('test-session');
   });
 
   it('does not validate an approval before human approval', () => {
@@ -150,7 +160,7 @@ describe('Approval Store', () => {
   it('does not validate a rejected approval', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
     approvalStore.storeApproval('test-rejected', 'send_email', args);
-    approvalStore.rejectApproval('test-rejected', 'tester');
+    approvalStore.rejectApproval('test-rejected', TEST_OPERATOR);
     const result = approvalStore.validateApproval('test-rejected', args);
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('Approval rejected');
@@ -160,7 +170,7 @@ describe('Approval Store', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
     const modified = { to: 'bob@example.com', body: 'Bye' };
     approvalStore.storeApproval('test-2', 'send_email', args);
-    approvalStore.approveApproval('test-2', 'tester');
+    approvalStore.approveApproval('test-2', TEST_OPERATOR);
     const result = approvalStore.validateApproval('test-2', modified);
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('APPROVAL_HASH_MISMATCH');
@@ -169,7 +179,7 @@ describe('Approval Store', () => {
   it('rejects already-consumed approvals', () => {
     const args = { body: 'Hi' };
     approvalStore.storeApproval('test-3', 'send_email', args);
-    approvalStore.approveApproval('test-3', 'tester');
+    approvalStore.approveApproval('test-3', TEST_OPERATOR);
     approvalStore.consumeApproval('test-3');
     const result = approvalStore.validateApproval('test-3', args);
     expect(result.valid).toBe(false);
@@ -179,7 +189,7 @@ describe('Approval Store', () => {
   it('rejects expired approvals', () => {
     const args = { body: 'Hi' };
     approvalStore.storeApproval('test-expired', 'send_email', args, '2000-01-01T00:00:00.000Z');
-    const approval = approvalStore.approveApproval('test-expired', 'tester');
+    const approval = approvalStore.approveApproval('test-expired', TEST_OPERATOR);
     const result = approvalStore.validateApproval('test-expired', args);
 
     expect(approval).toBeUndefined();

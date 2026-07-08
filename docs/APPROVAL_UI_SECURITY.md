@@ -21,6 +21,18 @@ The human approves readable content. The hash enforces that the approved content
 
 This means the UI must make the readable content and the canonical payload relationship clear. The user should not be asked to approve an opaque hash without seeing the relevant arguments.
 
+## Operator Identity Rule
+
+Approval identity must come from authenticated dashboard/API context. The backend must ignore `approvedBy`, `rejectedBy`, operator ID, or session ID values supplied in the request body.
+
+For the current local development dashboard, approval queue and decision endpoints require:
+
+```http
+Authorization: Bearer dev-approval-token
+```
+
+This token guard is for local development only. Production deployments need real authentication, authorization, session management, token rotation, and operator lifecycle controls.
+
 ## Minimum Security Requirements
 
 - Show the exact tool name and server/source namespace.
@@ -29,6 +41,7 @@ This means the UI must make the readable content and the canonical payload relat
 - Provide a canonical payload preview for debugging and audit.
 - Show the hash that will be bound to the approval.
 - Record approve/reject decision with timestamp and approving user/session.
+- Derive approving user/session from authenticated context, not user-editable request fields.
 - Prevent editing the payload inside the approval UI unless a new approval hash is generated.
 - Warn when arguments are large, truncated, binary-like, or contain hidden characters.
 - Treat tool descriptions and tool results as untrusted text.

@@ -10,9 +10,9 @@ Ananke exposes a REST API for tool execution, approvals, and audit queries.
 | `GET` | `/api/tools` | List all registered tools with risk metadata |
 | `GET` | `/api/tools/:name` | Get a single tool's metadata |
 | `POST` | `/api/execute` | Execute a tool call - `{ toolName, arguments, approvalId? }` |
-| `GET` | `/api/approvals` | List pending approval grants |
-| `POST` | `/api/approvals/:id/approve` | Approve a pending grant - `{ approvedBy? }` |
-| `POST` | `/api/approvals/:id/reject` | Reject a pending grant - `{ rejectedBy? }` |
+| `GET` | `/api/approvals` | List pending approval grants; requires approval operator auth |
+| `POST` | `/api/approvals/:id/approve` | Approve a pending grant; requires approval operator auth |
+| `POST` | `/api/approvals/:id/reject` | Reject a pending grant; requires approval operator auth |
 | `GET` | `/api/audit` | Query audit log - `?toolName=&eventType=&since=&limit=` |
 | `GET` | `/api/stats` | Runtime stats - executed, failed, denied, pending approvals |
 
@@ -52,6 +52,14 @@ The retry succeeds only after that grant is approved through the approval API or
 
 ## Approval Response
 
+Approval queue and decision endpoints require a local development operator token:
+
+```http
+Authorization: Bearer dev-approval-token
+```
+
+The approval API does not trust `approvedBy` or `rejectedBy` from the request body. Approver identity is derived from authenticated request context.
+
 `GET /api/approvals` returns pending grants with dashboard-safe review fields:
 
 ```json
@@ -68,3 +76,16 @@ The retry succeeds only after that grant is approved through the approval API or
 ```
 
 Approving a grant records `APPROVAL_GRANTED` in audit. Rejecting a grant records `APPROVAL_DENIED`; a later retry with that grant returns a denied outcome.
+
+Approval decision audit metadata includes:
+
+```json
+{
+  "decision": "approved",
+  "operatorId": "local-dashboard",
+  "operatorDisplayName": "Local Dashboard",
+  "sessionId": "local-dev-session",
+  "authMethod": "dev-token",
+  "decidedAt": "2026-07-08T12:00:00.000Z"
+}
+```

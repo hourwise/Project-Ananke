@@ -1,4 +1,4 @@
-import type { ApprovalGrant } from '@ananke/schema';
+import type { ApprovalGrant, OperatorIdentity } from '@ananke/schema';
 import { hashCanonicalCall } from './canonical-hash.js';
 
 /**
@@ -62,26 +62,28 @@ export function validateApproval(
   return { valid: true, grant };
 }
 
-export function approveApproval(id: string, approvedBy = 'human'): ApprovalGrant | undefined {
+export function approveApproval(id: string, operator: OperatorIdentity): ApprovalGrant | undefined {
   const grant = grants.get(id);
   if (!grant || grant.used || grant.status === 'rejected' || isExpired(grant)) {
     return undefined;
   }
 
   grant.status = 'approved';
-  grant.approvedBy = approvedBy;
+  grant.approvedBy = operator.operatorId;
+  grant.approvedBySessionId = operator.sessionId;
   grant.approvedAt = new Date().toISOString();
   return grant;
 }
 
-export function rejectApproval(id: string, rejectedBy = 'human'): ApprovalGrant | undefined {
+export function rejectApproval(id: string, operator: OperatorIdentity): ApprovalGrant | undefined {
   const grant = grants.get(id);
   if (!grant || grant.used || grant.status === 'approved') {
     return undefined;
   }
 
   grant.status = 'rejected';
-  grant.rejectedBy = rejectedBy;
+  grant.rejectedBy = operator.operatorId;
+  grant.rejectedBySessionId = operator.sessionId;
   grant.rejectedAt = new Date().toISOString();
   return grant;
 }
