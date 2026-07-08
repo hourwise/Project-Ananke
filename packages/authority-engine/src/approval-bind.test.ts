@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { hashCanonicalCall, verifyApprovalBinding } from './canonical-hash.js';
+import { canonicalJson, hashCanonicalCall, verifyApprovalBinding } from './canonical-hash.js';
 
 describe('Canonical Hash', () => {
   it('produces the same hash for logically identical objects', () => {
@@ -32,6 +32,91 @@ describe('Canonical Hash', () => {
   it('handles nested objects deterministically', () => {
     const a = { user: { name: 'Alice', id: 1 }, action: 'send' };
     const b = { action: 'send', user: { id: 1, name: 'Alice' } };
+    expect(hashCanonicalCall(a)).toBe(hashCanonicalCall(b));
+  });
+
+  it('sorts nested object keys recursively', () => {
+    const a = {
+      outer: {
+        zebra: { beta: 2, alpha: 1 },
+        apple: { delta: 4, charlie: 3 },
+      },
+    };
+    const b = {
+      outer: {
+        apple: { charlie: 3, delta: 4 },
+        zebra: { alpha: 1, beta: 2 },
+      },
+    };
+
+    expect(canonicalJson(a)).toBe(canonicalJson(b));
+    expect(hashCanonicalCall(a)).toBe(hashCanonicalCall(b));
+  });
+
+  it('preserves array order', () => {
+    const approved = { steps: ['read', 'write', 'audit'] };
+    const reordered = { steps: ['write', 'read', 'audit'] };
+
+    expect(hashCanonicalCall(approved)).not.toBe(hashCanonicalCall(reordered));
+  });
+
+  it('treats null and missing fields differently', () => {
+    const withNull = { path: 'note.txt', metadata: null };
+    const missing = { path: 'note.txt' };
+
+    expect(hashCanonicalCall(withNull)).not.toBe(hashCanonicalCall(missing));
+  });
+
+  it('does not normalize unicode strings', () => {
+    const composed = { value: '\u00e9' };
+    const decomposed = { value: 'e\u0301' };
+
+    expect(composed.value.normalize('NFC')).toBe(decomposed.value.normalize('NFC'));
+    expect(hashCanonicalCall(composed)).not.toBe(hashCanonicalCall(decomposed));
+  });
+
+  it('serializes 1 and 1.0 identically under JavaScript JSON semantics', () => {
+    const integerLiteral = { amount: 1 };
+    const decimalLiteral = { amount: 1.0 };
+
+    expect(canonicalJson(integerLiteral)).toBe('{"amount":1}');
+    expect(hashCanonicalCall(integerLiteral)).toBe(hashCanonicalCall(decimalLiteral));
+  });
+
+  it('preserves whitespace inside strings', () => {
+    const singleSpace = { body: 'hello world' };
+    const doubleSpace = { body: 'hello  world' };
+    const trailingSpace = { body: 'hello world ' };
+
+    expect(hashCanonicalCall(singleSpace)).not.toBe(hashCanonicalCall(doubleSpace));
+    expect(hashCanonicalCall(singleSpace)).not.toBe(hashCanonicalCall(trailingSpace));
+  });
+
+  it('handles deeply nested canonical JSON deterministically', () => {
+    const a = {
+      z: {
+        y: {
+          x: {
+            c: [{ b: 2, a: 1 }],
+            b: null,
+            a: { right: true, left: false },
+          },
+        },
+      },
+    };
+    const b = {
+      z: {
+        y: {
+          x: {
+            a: { left: false, right: true },
+            b: null,
+            c: [{ a: 1, b: 2 }],
+          },
+        },
+      },
+    };
+
+    expect(canonicalJson(a)).toBe(canonicalJson(b));
     expect(hashCanonicalCall(a)).toBe(hashCanonicalCall(b));
   });
 });

@@ -1,45 +1,57 @@
 # The Laws of Ananke
 
-These seven principles define Ananke more than the code does.
+These laws define the Phase 1 governance model. They are implementation constraints, not branding language.
 
-## Law I — Authority
+## Law I - Authority
 
-> **No side effect without authority.**
+> No side effect without authority.
 
-An AI may reason freely. Reality changes only with authority.
+An AI may reason freely. Reality changes only with authority granted through policy, approval, or a trusted execution rule.
 
-## Law II — Explainability
+## Law II - Explainability
 
-> **Every outcome is explainable.**
+> Every outcome is explainable.
 
-Nothing ever fails with `Tool failed`. Every failure must tell the agent how to recover.
+A governed tool call must never return only `Tool failed`. Every failure needs a typed state, reason code, and recovery guidance.
 
-## Law III — Content Binding
+## Law III - Content Binding
 
-> **Approval binds to content, not intention.**
+> Approval binds to content, not intention.
 
-Changing a single byte invalidates approval.
+Approval is for the exact canonical payload. If the payload changes, the approval is invalid.
 
-## Law IV — Frictionless Reads
+## Law IV - Frictionless Reads
 
-> **Safe reads should be frictionless.**
+> Safe reads should be frictionless.
 
-Don't slow down intelligence unnecessarily. Only dangerous actions require governance.
+Do not slow down intelligence unnecessarily. Read-only tools can pass through when policy allows them.
 
-## Law V — Auditability
+## Law V - Auditability
 
-> **Everything that changes reality leaves evidence.**
+> Every governed action leaves durable evidence.
 
-Every action is auditable. Forever.
+The audit log is part of the security model. A governed action without durable evidence is not fully governed.
 
-## Law VI — Determinism
+## Law VI - Determinism
 
-> **Policies are deterministic.**
+> Policies are deterministic given a captured input snapshot.
 
-Two identical requests should never produce different decisions.
+The same policy, tool identity, risk class, captured arguments, and relevant state snapshot must produce the same decision.
 
-## Law VII — Model Independence
+## Law VII - Model Independence
 
-> **Reasoning is replaceable.**
+> Reasoning is replaceable. Authority is not.
 
-GPT. Claude. Gemini. Qwen. Whatever comes next. The runtime remains.
+The model can be GPT, Claude, Gemini, Qwen, or something else. Authority remains outside the model and is enforced by the runtime.
+
+## Law VIII - Information Boundaries
+
+> Information has authority too.
+
+Reads can be dangerous when they expose secrets, private data, or privileged context. Phase 1 treats read risk by tool identity; future governance layers will classify content and information flow.
+
+## Law IX - Chokepoint Enforcement
+
+> A governed tool must not be directly reachable by the agent.
+
+If an agent can bypass Ananke and call the same MCP server, API key, CLI, database, or stdio handle directly, Ananke cannot govern that path.

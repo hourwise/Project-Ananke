@@ -1,6 +1,8 @@
 # Architecture
 
-Ananke is built as a set of focused engines, not a monolithic gateway.
+Ananke is an AI governance runtime built as a set of focused engines, not a monolithic gateway.
+
+MCP connects tools. Ananke governs execution. Governance claims apply only to calls routed through Ananke.
 
 ## Engine Overview
 
