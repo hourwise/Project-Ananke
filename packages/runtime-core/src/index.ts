@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { ToolRegistry } from './registry.js';
 import { RiskClassifier } from './classifier.js';
@@ -46,6 +47,7 @@ export class Gateway {
     this.audit = this.config.audit;
 
     // Mount routes
+    this.app.use('/api/*', cors());
     const routes = createGatewayRoutes(this);
     this.app.route('/api', routes);
 
@@ -116,6 +118,32 @@ export class Gateway {
       // Verify approval
       const check = this.approvals.checkApproval(options.approvalId, args);
       if (!check.valid) {
+        if (check.reason === 'Approval pending') {
+          const grant = this.approvals.get(options.approvalId);
+          return {
+            outcome: {
+              state: 'WAITING_FOR_APPROVAL',
+              reasonCode: 'APPROVAL_REQUIRED',
+              retryable: true,
+              requiresUser: true,
+              safeToContinue: false,
+              nextAction: `Approval is still pending. Re-submit after approvalId is approved: ${options.approvalId}`,
+            },
+            approvalRequired: true,
+            approvalGrantId: grant?.id ?? options.approvalId,
+          };
+        }
+
+        if (check.reason === 'Approval rejected') {
+          const outcome = classifyOutcome(
+            { success: false, error: 'Approval rejected', durationMs: 0 },
+            'DENY',
+          );
+          this.audit.recordApprovalDenied(toolName, options.approvalId);
+          this.audit.recordOutcomeGenerated(toolName, outcome);
+          return { outcome };
+        }
+
         this.audit.recordApprovalInvalidated(toolName, options.approvalId);
         const outcome = classifyOutcome(
           { success: false, error: check.reason, errorCode: 'APPROVAL_HASH_MISMATCH', durationMs: 0 },
@@ -124,7 +152,6 @@ export class Gateway {
         return { outcome };
       }
 
-      this.audit.recordApprovalGranted(toolName, options.approvalId);
     }
 
     // 6. Execute

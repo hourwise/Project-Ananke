@@ -133,15 +133,34 @@ describe('Approval Store', () => {
 
   it('validates an exact match', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
-    const grant = approvalStore.storeApproval('test-1', 'send_email', args);
+    approvalStore.storeApproval('test-1', 'send_email', args);
+    approvalStore.approveApproval('test-1', 'tester');
     const result = approvalStore.validateApproval('test-1', args);
     expect(result.valid).toBe(true);
+  });
+
+  it('does not validate an approval before human approval', () => {
+    const args = { to: 'bob@example.com', body: 'Hi' };
+    approvalStore.storeApproval('test-pending', 'send_email', args);
+    const result = approvalStore.validateApproval('test-pending', args);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('Approval pending');
+  });
+
+  it('does not validate a rejected approval', () => {
+    const args = { to: 'bob@example.com', body: 'Hi' };
+    approvalStore.storeApproval('test-rejected', 'send_email', args);
+    approvalStore.rejectApproval('test-rejected', 'tester');
+    const result = approvalStore.validateApproval('test-rejected', args);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('Approval rejected');
   });
 
   it('rejects a mismatch', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
     const modified = { to: 'bob@example.com', body: 'Bye' };
     approvalStore.storeApproval('test-2', 'send_email', args);
+    approvalStore.approveApproval('test-2', 'tester');
     const result = approvalStore.validateApproval('test-2', modified);
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('APPROVAL_HASH_MISMATCH');
@@ -150,9 +169,21 @@ describe('Approval Store', () => {
   it('rejects already-consumed approvals', () => {
     const args = { body: 'Hi' };
     approvalStore.storeApproval('test-3', 'send_email', args);
+    approvalStore.approveApproval('test-3', 'tester');
     approvalStore.consumeApproval('test-3');
     const result = approvalStore.validateApproval('test-3', args);
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('Approval already used');
+  });
+
+  it('rejects expired approvals', () => {
+    const args = { body: 'Hi' };
+    approvalStore.storeApproval('test-expired', 'send_email', args, '2000-01-01T00:00:00.000Z');
+    const approval = approvalStore.approveApproval('test-expired', 'tester');
+    const result = approvalStore.validateApproval('test-expired', args);
+
+    expect(approval).toBeUndefined();
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('Approval expired');
   });
 });

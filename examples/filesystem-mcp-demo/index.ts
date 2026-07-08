@@ -84,6 +84,11 @@ async function main(): Promise<void> {
       writeRequest.approvalGrantId,
     );
 
+    const approvedGrant = gateway.approvals.approve(writeRequest.approvalGrantId, 'demo-human');
+    assert.ok(approvedGrant, 'demo-human should be able to approve the pending write');
+    gateway.audit.recordApprovalGranted(writeTool, approvedGrant.canonicalHash);
+    console.log('   Approved by demo-human');
+
     const approvedWrite = await gateway.execute(writeTool, writeArgs, {
       approvalId: writeRequest.approvalGrantId,
     });
@@ -97,6 +102,9 @@ async function main(): Promise<void> {
     });
     expectState('second write without approval', secondWriteRequest.outcome, 'WAITING_FOR_APPROVAL');
     assert.ok(secondWriteRequest.approvalGrantId, 'second write should return an approval id');
+    const secondGrant = gateway.approvals.approve(secondWriteRequest.approvalGrantId, 'demo-human');
+    assert.ok(secondGrant, 'demo-human should be able to approve the second pending write');
+    gateway.audit.recordApprovalGranted(writeTool, secondGrant.canonicalHash);
 
     const tamperedWrite = await gateway.execute(
       writeTool,

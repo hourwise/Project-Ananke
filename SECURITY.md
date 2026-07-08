@@ -22,7 +22,7 @@ Ananke only governs tool calls that pass through the Ananke Gateway. If an agent
 - Phase 1 does not provide content-sensitive read classification.
 - Phase 1 does not provide full information-flow control.
 - Current canonical hashing is deterministic but not RFC 8785-complete.
-- Approval UI security requirements are documented but not fully implemented in the dashboard yet.
+- Approval UI has a basic approve/reject flow; authentication, authorization, and durable operator identity are not production-hardened yet.
 
 ## Reporting Security Issues
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** Solid Phase 1 prototype. 37 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
+**Status:** Solid Phase 1 prototype. 43 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
 
 ## What Is Solid
 
@@ -11,14 +11,14 @@
 | Policy engine | Deterministic risk-class-based defaults, configurable per tool |
 | Audit log | In-memory and SQLite backends, pluggable via `IAuditLog` |
 | MCP adapter | Stdio client adapter with a working filesystem demo |
-| Testbench | 7 must-pass scenarios across 5 domains, 37 unit tests |
+| Testbench | 7 must-pass scenarios across 5 domains, 43 unit tests |
 | CI | Build + test on push (Node 22, GitHub Actions) |
 
 ## In Progress
 
 | Area | Priority |
 |------|----------|
-| Approval dashboard flow | Approve/reject with secure payload display |
+| Dashboard auth/session hardening | Replace prototype session identity with real authenticated operator identity |
 | Policy file loading | Load risk overrides from `ananke.policy.yaml` |
 | MCP adapter validation | Test with real MCP servers beyond the local demo |
 | Agent SDK | Client library wrapping the agent loop for Claude/GPT/Gemini |
@@ -31,7 +31,7 @@ Make Phase 1 serious, narrow, testable, and honest about its boundaries:
 1. Keep the filesystem MCP demo reliable and documented.
 2. Document no-bypass/chokepoint deployment requirements.
 3. Expand canonical hashing tests and document limitations.
-4. Add approval dashboard security flow.
+4. Harden approval dashboard authentication, session identity, and operator audit metadata.
 5. Only then start information-flow control design.
 
 ## Phase 1: Side-Effect Governance
@@ -47,7 +47,7 @@ Phase 1 governs whether a tool call may execute and whether a side effect is aut
 | Audit logging | Implemented |
 | MCP stdio adapter | Implemented |
 | Filesystem MCP demo | Implemented |
-| Approval dashboard flow | Next |
+| Approval dashboard flow | Implemented: pending queue, approve/reject API, readable arguments, canonical payload, hash display |
 | Policy file loading | Next |
 | Audit query API | Future Phase 1 hardening |
 

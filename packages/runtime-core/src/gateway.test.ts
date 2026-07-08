@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Gateway } from './index.js';
+import { createGatewayRoutes } from './routes.js';
 
 function createGateway(): Gateway {
   const gw = new Gateway();
+  gw.approvals.clear();
 
   gw.registerTool({
     name: 'calendar.list_events',
@@ -58,7 +60,7 @@ function createGateway(): Gateway {
   return gw;
 }
 
-describe('Gateway — Safe Read (Test 1)', () => {
+describe('Gateway â€” Safe Read (Test 1)', () => {
   let gw: Gateway;
 
   beforeEach(() => {
@@ -78,7 +80,7 @@ describe('Gateway — Safe Read (Test 1)', () => {
   });
 });
 
-describe('Gateway — Risky Write (Test 2)', () => {
+describe('Gateway â€” Risky Write (Test 2)', () => {
   let gw: Gateway;
 
   beforeEach(() => {
@@ -107,7 +109,7 @@ describe('Gateway — Risky Write (Test 2)', () => {
   });
 });
 
-describe('Gateway — Approval Binding (Tests 3 & 4)', () => {
+describe('Gateway â€” Approval Binding (Tests 3 & 4)', () => {
   let gw: Gateway;
 
   beforeEach(() => {
@@ -117,10 +119,11 @@ describe('Gateway — Approval Binding (Tests 3 & 4)', () => {
   it('executes when exact approved args are retried', async () => {
     const emailArgs = { to: 'bob@example.com', subject: 'Update', body: 'Approved body.' };
 
-    // First attempt — should require approval
+    // First attempt â€” should require approval
     const r1 = await gw.execute('gmail.send_email', emailArgs);
     expect(r1.approvalRequired).toBe(true);
     expect(r1.approvalGrantId).toBeDefined();
+    gw.approvals.approve(r1.approvalGrantId!, 'tester');
 
     // Retry with approval
     const r2 = await gw.execute('gmail.send_email', emailArgs, { approvalId: r1.approvalGrantId });
@@ -134,6 +137,7 @@ describe('Gateway — Approval Binding (Tests 3 & 4)', () => {
     // Get approval for original
     const r1 = await gw.execute('gmail.send_email', originalArgs);
     expect(r1.approvalGrantId).toBeDefined();
+    gw.approvals.approve(r1.approvalGrantId!, 'tester');
 
     // Try with modified args
     const r2 = await gw.execute('gmail.send_email', modifiedArgs, { approvalId: r1.approvalGrantId });
@@ -142,7 +146,7 @@ describe('Gateway — Approval Binding (Tests 3 & 4)', () => {
   });
 });
 
-describe('Gateway — Policy Deny (Test 6)', () => {
+describe('Gateway â€” Policy Deny (Test 6)', () => {
   it('denies unknown unregistered tools', async () => {
     const gw = createGateway();
     const result = await gw.execute('dangerous_unknown_tool', {});
@@ -152,8 +156,8 @@ describe('Gateway — Policy Deny (Test 6)', () => {
   });
 });
 
-describe('Gateway — Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs APPROVAL_INVALIDATED', () => {
-  it('DENIED is final and non-retryable — agents must not retry', async () => {
+describe('Gateway â€” Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs APPROVAL_INVALIDATED', () => {
+  it('DENIED is final and non-retryable â€” agents must not retry', async () => {
     const gw = createGateway();
     const result = await gw.execute('dangerous_unknown_tool', {});
     expect(result.outcome.state).toBe('DENIED');
@@ -164,7 +168,7 @@ describe('Gateway — Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs APPRO
     expect(result.approvalGrantId).toBeUndefined();
   });
 
-  it('WAITING_FOR_APPROVAL is recoverable — agent can retry with approvalId', async () => {
+  it('WAITING_FOR_APPROVAL is recoverable â€” agent can retry with approvalId', async () => {
     const gw = createGateway();
     const result = await gw.execute('gmail.send_email', {
       to: 'bob@example.com',
@@ -188,6 +192,7 @@ describe('Gateway — Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs APPRO
 
     const r1 = await gw.execute('gmail.send_email', originalArgs);
     expect(r1.outcome.state).toBe('WAITING_FOR_APPROVAL');
+    gw.approvals.approve(r1.approvalGrantId!, 'tester');
 
     const r2 = await gw.execute('gmail.send_email', modifiedArgs, { approvalId: r1.approvalGrantId });
     expect(r2.outcome.state).toBe('APPROVAL_INVALIDATED');
@@ -212,6 +217,7 @@ describe('Gateway — Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs APPRO
     expect(waiting.outcome.retryable).toBe(true);
     expect(waiting.approvalRequired).toBe(true);
     expect(waiting.approvalGrantId).toBeDefined();
+    gw.approvals.approve(waiting.approvalGrantId!, 'tester');
 
     // APPROVAL_INVALIDATED
     const invalidated = await gw.execute(
@@ -230,22 +236,23 @@ describe('Gateway — Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs APPRO
   });
 });
 
-describe('Gateway — Permission Errors', () => {
+describe('Gateway â€” Permission Errors', () => {
   it('returns typed error for permission denied', async () => {
     const gw = createGateway();
 
     // Request approval first
     const r1 = await gw.execute('github.delete_branch', { branch: 'main' });
     expect(r1.approvalGrantId).toBeDefined();
+    gw.approvals.approve(r1.approvalGrantId!, 'tester');
 
-    // Execute with approval — should fail with PERMISSION_DENIED
+    // Execute with approval â€” should fail with PERMISSION_DENIED
     const r2 = await gw.execute('github.delete_branch', { branch: 'main' }, { approvalId: r1.approvalGrantId });
     expect(r2.outcome.state).toBe('FAILED');
     expect(r2.outcome.reasonCode).toBe('PERMISSION_DENIED');
   });
 });
 
-describe('Gateway — Audit Completeness', () => {
+describe('Gateway â€” Audit Completeness', () => {
   it('logs every stage of a safe read', async () => {
     const gw = createGateway();
     await gw.execute('calendar.list_events', {});
@@ -267,5 +274,70 @@ describe('Gateway — Audit Completeness', () => {
     const events = gw.audit.all();
     const types = events.map((e) => e.eventType);
     expect(types).toContain('APPROVAL_REQUESTED');
+  });
+});
+
+describe('Gateway approval API', () => {
+  it('lists pending approvals with risk class and canonical payload', async () => {
+    const gw = createGateway();
+    await gw.execute('gmail.send_email', { to: 'a@b.com', subject: 'S', body: 'B' });
+
+    const routes = createGatewayRoutes(gw);
+    const response = await routes.request('/approvals');
+    expect(response.status).toBe(200);
+
+    const approvals = await response.json() as Array<{
+      riskClass: string;
+      canonicalPayload: string;
+      status: string;
+    }>;
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]!.riskClass).toBe('EXTERNAL_SEND');
+    expect(approvals[0]!.status).toBe('pending');
+    expect(approvals[0]!.canonicalPayload).toBe('{"body":"B","subject":"S","to":"a@b.com"}');
+  });
+
+  it('requires dashboard approval before retry succeeds', async () => {
+    const gw = createGateway();
+    const args = { to: 'a@b.com', subject: 'S', body: 'B' };
+    const requested = await gw.execute('gmail.send_email', args);
+
+    const beforeApproval = await gw.execute('gmail.send_email', args, {
+      approvalId: requested.approvalGrantId,
+    });
+    expect(beforeApproval.outcome.state).toBe('WAITING_FOR_APPROVAL');
+
+    const routes = createGatewayRoutes(gw);
+    const approveResponse = await routes.request(`/approvals/${requested.approvalGrantId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ approvedBy: 'tester' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(approveResponse.status).toBe(200);
+
+    const afterApproval = await gw.execute('gmail.send_email', args, {
+      approvalId: requested.approvalGrantId,
+    });
+    expect(afterApproval.outcome.state).toBe('COMPLETED');
+  });
+
+  it('rejects approvals through the API', async () => {
+    const gw = createGateway();
+    const args = { to: 'a@b.com', subject: 'S', body: 'B' };
+    const requested = await gw.execute('gmail.send_email', args);
+
+    const routes = createGatewayRoutes(gw);
+    const rejectResponse = await routes.request(`/approvals/${requested.approvalGrantId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ rejectedBy: 'tester' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(rejectResponse.status).toBe(200);
+
+    const afterRejection = await gw.execute('gmail.send_email', args, {
+      approvalId: requested.approvalGrantId,
+    });
+    expect(afterRejection.outcome.state).toBe('DENIED');
+    expect(gw.approvals.pending()).toHaveLength(0);
   });
 });

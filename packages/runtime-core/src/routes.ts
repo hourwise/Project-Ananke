@@ -1,5 +1,15 @@
 import { Hono } from 'hono';
 import type { Gateway } from './index.js';
+import { canonicalJson } from '@ananke/authority-engine';
+
+function approvalResponse(gateway: Gateway, approval: NonNullable<ReturnType<Gateway['approvals']['get']>>) {
+  const tool = gateway.registry.get(approval.toolName);
+  return {
+    ...approval,
+    riskClass: tool?.riskClass ?? 'UNKNOWN',
+    canonicalPayload: canonicalJson(approval.arguments),
+  };
+}
 
 export function createGatewayRoutes(gateway: Gateway): Hono {
   const router = new Hono();
@@ -34,7 +44,33 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
   // ── Approvals ────────────────────────────────────────────
 
   router.get('/approvals', (c) => {
-    return c.json(gateway.approvals.pending());
+    return c.json(gateway.approvals.pending().map((approval) => approvalResponse(gateway, approval)));
+  });
+
+  router.post('/approvals/:id/approve', async (c) => {
+    const id = c.req.param('id');
+    const body: { approvedBy?: string } = await c.req.json<{ approvedBy?: string }>().catch(() => ({}));
+    const grant = gateway.approvals.approve(id, body.approvedBy ?? 'dashboard');
+
+    if (!grant) {
+      return c.json({ error: 'Approval not found or no longer approvable' }, 404);
+    }
+
+    gateway.audit.recordApprovalGranted(grant.toolName, grant.canonicalHash);
+    return c.json(approvalResponse(gateway, grant));
+  });
+
+  router.post('/approvals/:id/reject', async (c) => {
+    const id = c.req.param('id');
+    const body: { rejectedBy?: string } = await c.req.json<{ rejectedBy?: string }>().catch(() => ({}));
+    const grant = gateway.approvals.reject(id, body.rejectedBy ?? 'dashboard');
+
+    if (!grant) {
+      return c.json({ error: 'Approval not found or no longer rejectable' }, 404);
+    }
+
+    gateway.audit.recordApprovalDenied(grant.toolName, grant.canonicalHash);
+    return c.json(approvalResponse(gateway, grant));
   });
 
   // ── Audit ────────────────────────────────────────────────

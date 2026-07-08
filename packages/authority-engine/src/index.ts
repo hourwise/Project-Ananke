@@ -3,6 +3,8 @@ export {
   storeApproval,
   getApproval,
   validateApproval,
+  approveApproval,
+  rejectApproval,
   consumeApproval,
   clearApprovals,
   listPendingApprovals,

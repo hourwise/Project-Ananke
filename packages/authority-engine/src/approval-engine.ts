@@ -3,6 +3,10 @@ import {
   validateApproval,
   consumeApproval,
   listPendingApprovals,
+  approveApproval,
+  rejectApproval,
+  getApproval,
+  clearApprovals,
 } from './approval-store.js';
 import type { ApprovalGrant } from '@ananke/schema';
 
@@ -33,6 +37,18 @@ export class ApprovalEngine {
     return validateApproval(approvalId, proposedArgs);
   }
 
+  approve(approvalId: string, approvedBy = 'human'): ApprovalGrant | undefined {
+    return approveApproval(approvalId, approvedBy);
+  }
+
+  reject(approvalId: string, rejectedBy = 'human'): ApprovalGrant | undefined {
+    return rejectApproval(approvalId, rejectedBy);
+  }
+
+  get(approvalId: string): ApprovalGrant | undefined {
+    return getApproval(approvalId);
+  }
+
   /**
    * Mark an approval as consumed after a successful execution.
    */
@@ -45,5 +61,9 @@ export class ApprovalEngine {
    */
   pending(): ApprovalGrant[] {
     return listPendingApprovals();
+  }
+
+  clear(): void {
+    clearApprovals();
   }
 }

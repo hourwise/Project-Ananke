@@ -79,7 +79,7 @@ Ananke is built as focused engines, not a monolithic gateway. [Full architecture
 ```bash
 npm install
 npm run build
-npm test                            # 37 tests
+npm test                            # 43 tests
 npm run demo:filesystem             # read/write approval demo over MCP stdio
 npx tsx examples/mock-mcp-server/index.ts
 ```
@@ -141,12 +141,12 @@ Ananke is not limited to MCP. The same gateway can govern protocol-agnostic exec
 
 ## Current Status
 
-Solid Phase 1 prototype. 37 tests pass across 4 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
+Solid Phase 1 prototype. 43 tests pass across 4 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
 
 | What works | What is next |
 |-----------|--------------|
-| Typed outcomes (7 states, 13 codes) | Approval dashboard flow |
-| Hash-bound approval binding | Policy file loading from YAML |
+| Typed outcomes (7 states, 13 codes) | Policy file loading from YAML |
+| Hash-bound approval binding | Dashboard auth/session hardening |
 | Deterministic risk-class policy | Real MCP server validation beyond the demo |
 | SQLite + in-memory audit | Agent SDK for Claude/GPT/Gemini |
 | MCP stdio adapter | Scenario benchmark in CI |
