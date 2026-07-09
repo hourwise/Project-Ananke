@@ -31,3 +31,9 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Run scenario benchmark
+        run: npm run test:bench
+
+      - name: Run filesystem MCP demo
+        run: npm run demo:filesystem:run

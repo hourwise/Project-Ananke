@@ -48,6 +48,88 @@
 - 50 scenarios × 10 runs = 500 runs (initial benchmark)
 - Later: 100 scenarios × 20 runs × multiple clients
 
+## Bundled Test Matrix
+
+Every major capability should have bundled validation suites, not just isolated unit tests.
+
+| Layer | Examples |
+|-------|----------|
+| Normal operation | Safe reads, approved writes, policy allow/deny, audit creation |
+| Edge cases | Empty payloads, large payloads, unicode paths, nested paths, repeated approvals |
+| Failure cases | Permission denied, missing resources, timeout, stale state, invalid input |
+| Malicious cases | Payload mutation, policy bypass attempts, path traversal, prompt-injected metadata |
+| Regression cases | Permanent tests added from GitHub issues and security reports |
+| Cross-platform cases | Windows, Linux, macOS, Node versions, SQLite behavior |
+| Human approval flow | Pending, approved, rejected, expired, used, tampered approval |
+| Audit integrity | Every governed action leaves durable evidence |
+| Ecosystem compatibility | Ananke, Mnemosyne, and Runtime Contracts running together |
+
+New security issue = new permanent regression test.
+
+## Validation Levels
+
+| Level | Purpose | Target Duration |
+|-------|---------|-----------------|
+| Quick | Does the project basically work? | < 30 seconds |
+| Standard | Typical contributor validation | 3-5 minutes |
+| Full | All bundled tests and demos | Project-dependent |
+| Hostile | Malicious, malformed, interrupted, and concurrency cases | Project-dependent |
+
+## Validation Reports
+
+Every validation run should eventually produce a downloadable local report.
+
+Required formats:
+
+- JSON for machines.
+- CSV for spreadsheet/search workflows.
+
+Required summary fields:
+
+- Project or combined project set.
+- Version and commit SHA.
+- Test suite version.
+- Operating system, OS build, and CPU architecture.
+- Node, npm, SQLite, and relevant runtime versions.
+- Harness/editor/client context where known.
+- Model context where known.
+- MCP client/server context where relevant.
+- Started and finished timestamps.
+- Total, passed, failed, and skipped counts.
+- Per-test result, status, duration, failure reason, log pointer, and reproduction command.
+
+External submission must be explicit and user-approved. Reports submitted to GitHub issues, GitHub discussions, or future dashboards must be anonymised first.
+
+## Ecosystem Compatibility Tests
+
+Future combined runs should cover:
+
+- Ananke only.
+- Mnemosyne only.
+- Runtime Contracts only.
+- Ananke plus Mnemosyne.
+- Ananke plus Mnemosyne plus Runtime Contracts.
+
+Combined tests must verify:
+
+- Runtime identity is available for each participating runtime.
+- `ProtocolVersion` compatibility is checked before execution.
+- Incompatible protocol versions fail fast with a typed compatibility error.
+- No port conflicts.
+- No SQLite lock conflicts.
+- No shared config collisions.
+- No MCP namespace or tool-name collisions.
+- Clear memory access boundaries.
+- Correlatable audit/event ordering.
+- Safe startup and shutdown ordering.
+- Failure isolation.
+- Concurrent request behavior.
+
+Ecosystem safety rules:
+
+- Ananke failure must not corrupt Mnemosyne memory.
+- Mnemosyne failure must not bypass Ananke authority.
+
 ## Critical Safety Metrics
 
 | Metric | Target |

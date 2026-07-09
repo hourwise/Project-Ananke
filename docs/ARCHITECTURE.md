@@ -4,6 +4,8 @@ Ananke is an AI governance runtime built as a set of focused engines, not a mono
 
 MCP connects tools. Ananke governs execution. Governance claims apply only to calls routed through Ananke.
 
+Ananke is not an MCP gateway replacement. Gateways handle discovery, routing, identity, auth, quotas, and traffic control. Ananke handles governed execution after a request reaches the runtime boundary.
+
 ## Engine Overview
 
 | Engine | Package | Purpose |
@@ -37,3 +39,32 @@ AI Client -> Ananke Gateway -> MCP Server / Tool
 - **Risky writes** are gated behind hash-bound approval.
 - **Failures** are always typed, never raw.
 - **Every side effect** is audited.
+
+## Ecosystem Position
+
+Ananke is designed to run alongside sibling ecosystem projects:
+
+- Project Mnemosyne: complementary runtime expected to run alongside Ananke.
+- Project Runtime Contracts: shared protocol, types, schemas, constants, and interfaces used across runtimes.
+
+Runtime Contracts is intentionally not a runtime layer. It should not contain engines, persistence, policies, databases, or runtime behavior.
+
+The intended layering is:
+
+```
+AI Agent
+   |
+Gateway / routing layer
+   |
+Protocol compatibility check
+   |
+Ananke execution governance
+   |
+Mnemosyne persistent knowledge
+   |
+MCP servers / tools / APIs
+```
+
+This layering is provisional. The stable architectural requirement is separation of concerns: routing infrastructure should not replace execution governance, and memory/runtime failures must not bypass authority controls.
+
+Runtime compatibility should be checked before combined execution. A client, coordinator, or future runtime should be able to compare runtime identity and `ProtocolVersion` values and reject incompatible combinations before tool execution starts.

@@ -1,4 +1,6 @@
-import type { ToolMetadata, Outcome, PolicyDecision } from '@ananke/schema';
+import { Gateway } from '@ananke/runtime-core';
+import { MOCK_TOOLS, MUST_PASS_SCENARIOS } from './mock-server.js';
+import type { ToolMetadata, Outcome, OperatorIdentity, PolicyDecision, RiskClass } from '@ananke/schema';
 
 /**
  * Test scenario definition.
@@ -106,4 +108,107 @@ export async function runBenchmark(
   const avgLatencyMs = flat.length > 0 ? flat.reduce((a, r) => a + r.durationMs, 0) / flat.length : 0;
 
   return { results: allResults, passRate, avgLatencyMs };
+}
+
+const BENCH_OPERATOR: OperatorIdentity = {
+  operatorId: 'testbench',
+  displayName: 'Ananke Testbench',
+  sessionId: 'testbench-session',
+  authMethod: 'dev-token',
+  authenticatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+const TOOL_RISK: Record<string, RiskClass> = {
+  'calendar.list_events': 'READ_ONLY',
+  'gmail.send_email': 'EXTERNAL_SEND',
+  'github.delete_branch': 'DELETE',
+  timeout_tool: 'INTERNAL_WRITE',
+  stale_resource_tool: 'INTERNAL_WRITE',
+  malicious_content_tool: 'EXTERNAL_SEND',
+  read_document: 'READ_ONLY',
+};
+
+function createBenchmarkGateway(): Gateway {
+  const gateway = new Gateway({ autoLoadPolicy: false });
+  gateway.approvals.clear();
+
+  for (const [name, executor] of Object.entries(MOCK_TOOLS)) {
+    const riskClass = TOOL_RISK[name] ?? 'UNKNOWN';
+    const metadata: ToolMetadata = {
+      name,
+      server: 'testbench',
+      riskClass,
+      requiredPermissions: [],
+      retryable: false,
+      requiresApproval: riskClass !== 'READ_ONLY',
+    };
+    gateway.registerTool(metadata);
+    gateway.setExecutor(name, executor);
+  }
+
+  return gateway;
+}
+
+async function executeScenario(
+  gateway: Gateway,
+  scenario: TestScenario,
+): Promise<{ outcome: Outcome; approvalRequired?: boolean }> {
+  if (scenario.name === 'approval_hash_mismatch_blocks') {
+    const originalArgs = { ...scenario.arguments, body: 'Here is the update.' };
+    const requested = await gateway.execute(scenario.toolCall, originalArgs);
+    if (!requested.approvalGrantId) return requested;
+    gateway.approvals.approve(requested.approvalGrantId, BENCH_OPERATOR);
+    const result = await gateway.execute(scenario.toolCall, scenario.arguments, {
+      approvalId: requested.approvalGrantId,
+    });
+    return { ...result, approvalRequired: requested.approvalRequired };
+  }
+
+  const requested = await gateway.execute(scenario.toolCall, scenario.arguments);
+  if (scenario.expectedDecision !== 'REQUIRE_APPROVAL' || !scenario.expectedState) {
+    return requested;
+  }
+
+  if (!requested.approvalGrantId) return requested;
+  gateway.approvals.approve(requested.approvalGrantId, BENCH_OPERATOR);
+  const result = await gateway.execute(scenario.toolCall, scenario.arguments, {
+    approvalId: requested.approvalGrantId,
+  });
+  return { ...result, approvalRequired: requested.approvalRequired };
+}
+
+async function main(): Promise<void> {
+  const runs = Number(process.env.ANANKE_BENCH_RUNS ?? '3');
+  const gateway = createBenchmarkGateway();
+  const benchmark = await runBenchmark(
+    MUST_PASS_SCENARIOS,
+    (tool, args) => {
+      const scenario = MUST_PASS_SCENARIOS.find((candidate) => (
+        candidate.toolCall === tool && candidate.arguments === args
+      ));
+      if (!scenario) return gateway.execute(tool, args);
+      return executeScenario(gateway, scenario);
+    },
+    runs,
+  );
+
+  for (const [index, run] of benchmark.results.entries()) {
+    for (const result of run) {
+      const status = result.passed ? 'PASS' : 'FAIL';
+      console.log(`[${status}] run=${index + 1} scenario=${result.scenario} ${result.durationMs}ms`);
+      for (const failure of result.failures) {
+        console.error(`  - ${failure}`);
+      }
+    }
+  }
+
+  console.log(`passRate=${benchmark.passRate.toFixed(2)} avgLatencyMs=${benchmark.avgLatencyMs.toFixed(1)}`);
+
+  if (benchmark.passRate !== 100) {
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1]?.endsWith('runner.ts') || process.argv[1]?.endsWith('runner.js')) {
+  void main();
 }

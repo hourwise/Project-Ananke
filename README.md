@@ -139,6 +139,20 @@ Ananke is not limited to MCP. The same gateway can govern protocol-agnostic exec
 
 ---
 
+## Ecosystem
+
+Ananke is being developed as part of a small runtime ecosystem:
+
+- [Project Ananke](https://github.com/hourwise/Project-Ananke): execution governance, approval binding, auditability, and recoverable outcomes.
+- [Project Mnemosyne](https://github.com/hourwise/Project-Mnemosyne): sister project built in the same repository format and intended to run alongside Ananke.
+- [Project Runtime Contracts](https://github.com/hourwise/project-runtime-contracts): shared protocol, types, schemas, constants, and interfaces used across runtimes.
+
+The projects are separate runtimes with complementary responsibilities. Ananke focuses on governed tool execution: policy, approval, auditability, and recoverable outcomes. Mnemosyne is expected to run alongside Ananke rather than replace it. Runtime Contracts is not a runtime; it is the contracts-only package for protocol compatibility, runtime identity, version negotiation, shared schemas, and stable interfaces.
+
+Runtime Contracts should not contain engines, persistence, policies, databases, or runtime behavior. Those remain inside Ananke, Mnemosyne, or future runtimes.
+
+---
+
 ## Current Status
 
 Solid Phase 1 prototype. 51 tests pass across 5 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
@@ -149,7 +163,7 @@ Solid Phase 1 prototype. 51 tests pass across 5 test files. All 7 must-pass safe
 | Hash-bound approval binding | Production auth/RBAC for dashboard |
 | Deterministic risk-class policy | MCP adapter validation |
 | SQLite + in-memory audit | Agent SDK for Claude/GPT/Gemini |
-| MCP stdio adapter | Scenario benchmark in CI |
+| MCP stdio adapter | Production-grade MCP server matrix |
 | Filesystem MCP demo | Content-sensitive read governance design |
 | Dashboard auth/session guard | Audit query API |
 | Policy file loading | Policy expressiveness |
@@ -181,6 +195,7 @@ Solid Phase 1 prototype. 51 tests pass across 5 test files. All 7 must-pass safe
 | [ADR-0030 Information-Flow Control](docs/ADR-0030-INFORMATION-FLOW-CONTROL.md) | Future content-sensitive governance layer |
 | [ADR-0031 Approval UI Security](docs/ADR-0031-APPROVAL-UI-SECURITY.md) | Decision record for approval UI requirements |
 | [ADR-0032 Canonical Payload Hashing](docs/ADR-0032-CANONICAL-PAYLOAD-HASHING.md) | Decision record for hash-bound payload approval |
+| [ADR-0033 Frictionless Validation And Ecosystem Compatibility](docs/ADR-0033-FRICTIONLESS-VALIDATION-AND-ECOSYSTEM-COMPATIBILITY.md) | Decision record for validation reports and ecosystem compatibility |
 
 ---
 

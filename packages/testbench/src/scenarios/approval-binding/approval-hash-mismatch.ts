@@ -10,7 +10,7 @@ const scenario: TestScenario = {
   toolCall: 'gmail.send_email',
   arguments: { to: 'bob@example.com', subject: 'Update', body: 'Modified body!' },
   expectedDecision: 'REQUIRE_APPROVAL',
-  expectedState: 'DENIED',
+  expectedState: 'APPROVAL_INVALIDATED',
   failIf: ['modified_call_executes'],
 };
 
