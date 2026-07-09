@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { ToolRegistry } from './registry.js';
 import { RiskClassifier } from './classifier.js';
-import { PolicyEngine } from '@ananke/policy-engine';
+import { discoverPolicyConfigFile, loadPolicyConfigFile, PolicyEngine } from '@ananke/policy-engine';
 import { ApprovalEngine } from '@ananke/authority-engine';
 import { executeTool, type ToolExecutor } from '@ananke/tool-router';
 import { classifyOutcome } from '@ananke/outcome-engine';
@@ -30,6 +30,8 @@ export interface GatewayConfig {
   mcpServers?: { name: string; url: string }[];
   audit?: IAuditLog;
   approvalAuth?: ApprovalAuthConfig;
+  policyFile?: string;
+  autoLoadPolicy?: boolean;
 }
 
 /**
@@ -55,6 +57,8 @@ export class Gateway {
     mcpServers: { name: string; url: string }[];
     audit: IAuditLog;
     approvalAuth: Required<ApprovalAuthConfig>;
+    policyFile?: string;
+    autoLoadPolicy: boolean;
   };
 
   constructor(config: GatewayConfig = {}) {
@@ -72,8 +76,19 @@ export class Gateway {
           },
         },
       },
+      policyFile: config.policyFile,
+      autoLoadPolicy: config.autoLoadPolicy ?? true,
     };
     this.audit = this.config.audit;
+
+    const policyFile = this.config.policyFile ?? (
+      this.config.autoLoadPolicy ? discoverPolicyConfigFile() : undefined
+    );
+    if (policyFile) {
+      const loaded = loadPolicyConfigFile(policyFile);
+      this.policy.loadConfig(loaded.config);
+      console.log(`[ananke] loaded policy config from ${loaded.path}`);
+    }
 
     // Mount routes
     this.app.use('/api/*', cors({

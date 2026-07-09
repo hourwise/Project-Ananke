@@ -1,3 +1,6 @@
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Gateway } from './index.js';
 import { createGatewayRoutes } from './routes.js';
@@ -166,6 +169,48 @@ describe('Gateway â€” Policy Deny (Test 6)', () => {
     expect(result.outcome.state).toBe('DENIED');
     expect(result.outcome.reasonCode).toBe('POLICY_DENIED');
     expect(result.outcome.retryable).toBe(false);
+  });
+});
+
+describe('Gateway policy file loading', () => {
+  it('loads explicit policy file overrides', async () => {
+    const dir = join(tmpdir(), `ananke-gateway-policy-${crypto.randomUUID()}`);
+    mkdirSync(dir, { recursive: true });
+
+    try {
+      const policyFile = join(dir, 'ananke.policy.yaml');
+      writeFileSync(policyFile, [
+        'tools:',
+        '  gmail.send_email:',
+        '    risk: EXTERNAL_SEND',
+        '    approval: never',
+        '',
+      ].join('\n'));
+
+      const configured = new Gateway({ policyFile });
+      configured.approvals.clear();
+      configured.registerTool({
+        name: 'gmail.send_email',
+        server: 'test',
+        description: 'Send an email',
+        riskClass: 'EXTERNAL_SEND',
+        requiredPermissions: [],
+        retryable: false,
+        requiresApproval: true,
+      });
+      configured.setExecutor('gmail.send_email', async () => ({ sent: true }));
+
+      const result = await configured.execute('gmail.send_email', {
+        to: 'a@b.com',
+        subject: 'S',
+        body: 'B',
+      });
+
+      expect(result.outcome.state).toBe('COMPLETED');
+      expect(result.approvalRequired).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

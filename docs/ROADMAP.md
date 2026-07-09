@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** Solid Phase 1 prototype. 45 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
+**Status:** Solid Phase 1 prototype. 51 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
 
 ## What Is Solid
 
@@ -8,17 +8,16 @@
 |------|-------|
 | Outcome envelope | 7 typed states, 13 reason codes, recovery guidance on every failure |
 | Approval binding | SHA-256 over deterministic canonical JSON, hash mismatch blocks execution |
-| Policy engine | Deterministic risk-class-based defaults, configurable per tool |
+| Policy engine | Deterministic risk-class-based defaults, configurable per tool and policy file |
 | Audit log | In-memory and SQLite backends, pluggable via `IAuditLog` |
 | MCP adapter | Stdio client adapter with a working filesystem demo |
-| Testbench | 7 must-pass scenarios across 5 domains, 45 unit tests |
+| Testbench | 7 must-pass scenarios across 5 domains, 51 unit tests |
 | CI | Build + test on push (Node 22, GitHub Actions) |
 
 ## In Progress
 
 | Area | Priority |
 |------|----------|
-| Policy file loading | Load risk overrides from `ananke.policy.yaml` |
 | MCP adapter validation | Test with real MCP servers beyond the local demo |
 | Agent SDK | Client library wrapping the agent loop for Claude/GPT/Gemini |
 | CI hardening | Add repeated scenario benchmark runs to CI |
@@ -48,7 +47,7 @@ Phase 1 governs whether a tool call may execute and whether a side effect is aut
 | Filesystem MCP demo | Implemented |
 | Approval dashboard flow | Implemented: pending queue, approve/reject API, readable arguments, canonical payload, hash display |
 | Dashboard auth/session hardening | Implemented for local development: bearer-token guard, authenticated operator identity, spoofing tests, audit metadata |
-| Policy file loading | Next |
+| Policy file loading | Implemented: auto-discovery for `ananke.policy.yaml`, `ananke.policy.yml`, and `ananke.policy.json` |
 | Audit query API | Future Phase 1 hardening |
 
 ## Phase 2: Information-Flow Governance

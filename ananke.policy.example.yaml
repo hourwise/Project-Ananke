@@ -1,0 +1,20 @@
+tools:
+  calendar.list_events:
+    risk: READ_ONLY
+    approval: never
+
+  filesystem.read_file:
+    risk: READ_ONLY
+    approval: never
+
+  filesystem.write_file:
+    risk: INTERNAL_WRITE
+    approval: required
+
+  gmail.send_email:
+    risk: EXTERNAL_SEND
+    approval: required
+
+  github.delete_branch:
+    risk: DELETE
+    approval: required
