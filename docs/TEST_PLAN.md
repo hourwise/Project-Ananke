@@ -77,7 +77,20 @@ New security issue = new permanent regression test.
 
 ## Validation Reports
 
-Every validation run should eventually produce a downloadable local report.
+The scenario benchmark produces a downloadable local report in `validation-reports/`.
+
+Run:
+
+```bash
+npm run test:bench
+```
+
+Outputs:
+
+- `validation-reports/validation-report.json`
+- `validation-reports/validation-report.csv`
+- `validation-reports/filesystem-demo-report.json`
+- `validation-reports/filesystem-demo-report.csv`
 
 Required formats:
 

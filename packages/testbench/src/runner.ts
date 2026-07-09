@@ -1,5 +1,7 @@
 import { Gateway } from '@ananke/runtime-core';
+import { join } from 'node:path';
 import { MOCK_TOOLS, MUST_PASS_SCENARIOS } from './mock-server.js';
+import { createValidationReport, writeValidationReport } from './validation-report.js';
 import type { ToolMetadata, Outcome, OperatorIdentity, PolicyDecision, RiskClass } from '@ananke/schema';
 
 /**
@@ -179,6 +181,8 @@ async function executeScenario(
 
 async function main(): Promise<void> {
   const runs = Number(process.env.ANANKE_BENCH_RUNS ?? '3');
+  const reportDir = process.env.ANANKE_REPORT_DIR ?? join(process.env.INIT_CWD ?? process.cwd(), 'validation-reports');
+  const startedAt = new Date().toISOString();
   const gateway = createBenchmarkGateway();
   const benchmark = await runBenchmark(
     MUST_PASS_SCENARIOS,
@@ -191,6 +195,7 @@ async function main(): Promise<void> {
     },
     runs,
   );
+  const finishedAt = new Date().toISOString();
 
   for (const [index, run] of benchmark.results.entries()) {
     for (const result of run) {
@@ -203,6 +208,17 @@ async function main(): Promise<void> {
   }
 
   console.log(`passRate=${benchmark.passRate.toFixed(2)} avgLatencyMs=${benchmark.avgLatencyMs.toFixed(1)}`);
+
+  const report = createValidationReport({
+    startedAt,
+    finishedAt,
+    results: benchmark.results,
+    passRate: benchmark.passRate,
+    avgLatencyMs: benchmark.avgLatencyMs,
+  });
+  writeValidationReport(report, reportDir);
+  console.log(`validationReport=${reportDir}/validation-report.json`);
+  console.log(`validationCsv=${reportDir}/validation-report.csv`);
 
   if (benchmark.passRate !== 100) {
     process.exitCode = 1;

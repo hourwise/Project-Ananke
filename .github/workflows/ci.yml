@@ -29,11 +29,22 @@ jobs:
       - name: Build all packages
         run: npm run build
 
+      - name: Build testbench
+        run: npm run build -w @ananke/testbench
+
       - name: Run tests
         run: npm test
 
       - name: Run scenario benchmark
         run: npm run test:bench
+
+      - name: Upload validation reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-reports-node-${{ matrix.node-version }}
+          path: validation-reports/
+          if-no-files-found: warn
 
       - name: Run filesystem MCP demo
         run: npm run demo:filesystem:run

@@ -80,7 +80,8 @@ Ananke is built as focused engines, not a monolithic gateway. [Full architecture
 npm install
 npm run build
 npm test                            # 51 tests
-npm run demo:filesystem             # read/write approval demo over MCP stdio
+npm run test:bench                  # writes validation-reports/*.json and *.csv
+npm run demo:filesystem             # MCP demo, also writes validation-reports/*.json and *.csv
 npx tsx examples/mock-mcp-server/index.ts
 ```
 
@@ -101,6 +102,11 @@ npm run demo:filesystem
 ```
 
 The demo starts a local MCP stdio filesystem server, connects through `McpAdapter`, routes calls through `Gateway`, and records events in `SqliteAuditLog`.
+
+It also writes:
+
+- `validation-reports/filesystem-demo-report.json`
+- `validation-reports/filesystem-demo-report.csv`
 
 ---
 

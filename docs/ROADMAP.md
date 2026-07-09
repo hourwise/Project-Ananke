@@ -51,7 +51,7 @@ Phase 1 governs whether a tool call may execute and whether a side effect is aut
 | Dashboard auth/session hardening | Implemented for local development: bearer-token guard, authenticated operator identity, spoofing tests, audit metadata |
 | Policy file loading | Implemented: auto-discovery for `ananke.policy.yaml`, `ananke.policy.yml`, and `ananke.policy.json` |
 | Audit query API | Future Phase 1 hardening |
-| Validation report export | Next: JSON/CSV output from scenario benchmark and filesystem demo |
+| Validation report export | Implemented for scenario benchmark and filesystem demo JSON/CSV |
 | GitHub report workflow | Future Phase 1 hardening: user-approved anonymised report submission |
 
 ## Ecosystem Build Plan
@@ -64,10 +64,10 @@ Ananke is part of a broader ecosystem with [Project Mnemosyne](https://github.co
 |------|--------|
 | Unit tests | Implemented |
 | Scenario benchmark | Implemented and wired into CI |
-| Filesystem MCP demo | Implemented and wired into CI |
-| Validation report schema | Next |
-| JSON/CSV report export | Next |
-| Downloadable local report artifact | Next |
+| Filesystem MCP demo | Implemented, wired into CI, exports JSON/CSV report |
+| Validation report schema | Implemented locally in testbench; move to Runtime Contracts after stabilization |
+| JSON/CSV report export | Implemented for scenario benchmark and filesystem demo |
+| Downloadable local report artifact | Implemented for CI scenario benchmark |
 | GitHub issue/discussion report generation | Future |
 
 ### Ecosystem Phase 2: Runtime Contracts
