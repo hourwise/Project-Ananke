@@ -14,6 +14,8 @@
     "format": "prettier --write packages",
     "dev:gateway": "npm run dev -w @ananke/runtime-core",
     "dev:dashboard": "npm run dev -w @ananke/dashboard",
+    "validate:env": "node scripts/environment-check.mjs",
+    "validate:quick": "npm run validate:env && npm run build && npm run build -w @ananke/testbench && npm test && npm run test:bench && npm run demo:filesystem:run",
     "test:bench": "npm run bench -w @ananke/testbench",
     "demo:filesystem": "npm run build && npm run demo:filesystem:run",
     "demo:filesystem:run": "npx tsx examples/filesystem-mcp-demo/index.ts"

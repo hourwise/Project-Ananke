@@ -21,6 +21,7 @@
 | MCP adapter validation | Test with real MCP servers beyond the local demo |
 | Validation reporting | Generate downloadable JSON/CSV reports for local and CI runs |
 | Ecosystem compatibility plan | Prepare Ananke + Mnemosyne + Runtime Contracts validation shape |
+| Environment check | Implemented locally and in CI; expand into guided remediation later |
 | Agent SDK | Client library wrapping the agent loop for Claude/GPT/Gemini |
 | CI hardening | Add broader MCP server matrix after filesystem demo |
 
@@ -65,6 +66,8 @@ Ananke is part of a broader ecosystem with [Project Mnemosyne](https://github.co
 | Unit tests | Implemented |
 | Scenario benchmark | Implemented and wired into CI |
 | Filesystem MCP demo | Implemented, wired into CI, exports JSON/CSV report |
+| One-command quick validation | Implemented: `npm run validate:quick` |
+| Environment preflight | Implemented: `npm run validate:env`, exports JSON/CSV report |
 | Validation report schema | Implemented locally in testbench; move to Runtime Contracts after stabilization |
 | JSON/CSV report export | Implemented for scenario benchmark and filesystem demo |
 | Downloadable local report artifact | Implemented for CI scenario benchmark |

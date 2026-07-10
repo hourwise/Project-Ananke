@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run environment check
+        run: npm run validate:env
+
       - name: Build all packages
         run: npm run build
 
@@ -38,6 +41,9 @@ jobs:
       - name: Run scenario benchmark
         run: npm run test:bench
 
+      - name: Run filesystem MCP demo
+        run: npm run demo:filesystem:run
+
       - name: Upload validation reports
         uses: actions/upload-artifact@v4
         if: always()
@@ -45,6 +51,3 @@ jobs:
           name: validation-reports-node-${{ matrix.node-version }}
           path: validation-reports/
           if-no-files-found: warn
-
-      - name: Run filesystem MCP demo
-        run: npm run demo:filesystem:run

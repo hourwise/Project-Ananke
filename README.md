@@ -78,6 +78,8 @@ Ananke is built as focused engines, not a monolithic gateway. [Full architecture
 
 ```bash
 npm install
+npm run validate:env                 # preflight diagnostics, writes environment report
+npm run validate:quick               # build, tests, benchmark, filesystem demo, reports
 npm run build
 npm test                            # 51 tests
 npm run test:bench                  # writes validation-reports/*.json and *.csv

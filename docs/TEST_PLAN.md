@@ -70,7 +70,8 @@ New security issue = new permanent regression test.
 
 | Level | Purpose | Target Duration |
 |-------|---------|-----------------|
-| Quick | Does the project basically work? | < 30 seconds |
+| Environment | `npm run validate:env`: Node, npm, dependencies, SQLite package, demo files, local ports | < 10 seconds |
+| Quick | `npm run validate:quick`: build, unit tests, benchmark, filesystem demo, reports | Project-dependent |
 | Standard | Typical contributor validation | 3-5 minutes |
 | Full | All bundled tests and demos | Project-dependent |
 | Hostile | Malicious, malformed, interrupted, and concurrency cases | Project-dependent |
@@ -91,6 +92,8 @@ Outputs:
 - `validation-reports/validation-report.csv`
 - `validation-reports/filesystem-demo-report.json`
 - `validation-reports/filesystem-demo-report.csv`
+- `validation-reports/environment-check.json`
+- `validation-reports/environment-check.csv`
 
 Required formats:
 
