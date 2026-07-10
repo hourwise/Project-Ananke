@@ -91,6 +91,45 @@ describe('Canonical Hash', () => {
     expect(hashCanonicalCall(integerLiteral)).toBe(hashCanonicalCall(decimalLiteral));
   });
 
+  it('rejects JavaScript-only values instead of coercing them into the approved JSON payload', () => {
+    const unsupportedValues = [
+      undefined,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      -0,
+      1n,
+      new Date('2026-01-01T00:00:00.000Z'),
+      () => undefined,
+      Symbol('value'),
+    ];
+
+    for (const value of unsupportedValues) {
+      expect(() => canonicalJson({ value })).toThrow('Approval payload must contain only JSON data');
+    }
+  });
+
+  it('blocks values that JSON.stringify would collide with null or an omitted field', () => {
+    expect(hashCanonicalCall({ value: null })).not.toBe(hashCanonicalCall({ value: 'null' }));
+    expect(() => hashCanonicalCall({ value: Number.NaN })).toThrow('numbers must be finite');
+    expect(() => hashCanonicalCall({ value: undefined })).toThrow('unsupported undefined value');
+  });
+
+  it('rejects sparse arrays, accessors, non-enumerable fields, and shared references', () => {
+    const sparse = ['approved', , 'payload'];
+    expect(() => canonicalJson({ sparse })).toThrow('sparse arrays are not supported');
+
+    const accessor: Record<string, unknown> = {};
+    Object.defineProperty(accessor, 'value', { enumerable: true, get: () => 'approved' });
+    expect(() => canonicalJson(accessor)).toThrow('accessor properties are not supported');
+
+    const hidden: Record<string, unknown> = { value: 'approved' };
+    Object.defineProperty(hidden, 'internal', { value: 'not-hashed' });
+    expect(() => canonicalJson(hidden)).toThrow('non-enumerable properties are not supported');
+
+    const shared = { value: 'approved' };
+    expect(() => canonicalJson({ first: shared, second: shared })).toThrow('shared object references are not supported');
+  });
+
   it('preserves whitespace inside strings', () => {
     const singleSpace = { body: 'hello world' };
     const doubleSpace = { body: 'hello  world' };

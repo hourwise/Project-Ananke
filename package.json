@@ -21,6 +21,7 @@
     "demo:filesystem:run": "npx tsx examples/filesystem-mcp-demo/index.ts"
   },
   "devDependencies": {
+    "@modelcontextprotocol/server-everything": "2026.1.26",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "eslint": "^9.0.0",

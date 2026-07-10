@@ -25,7 +25,7 @@ Ananke sorts object keys before hashing, so both payloads bind to the same appro
 
 ## Current Canonicalization Scope
 
-The current implementation is deterministic for JavaScript values handled by `JSON.stringify` with sorted object keys. It is not a full implementation of RFC 8785 / JSON Canonicalization Scheme.
+The current implementation accepts a strict JSON-shaped payload profile with sorted object keys. It is not a full implementation of RFC 8785 / JSON Canonicalization Scheme.
 
 Current behavior:
 
@@ -35,7 +35,10 @@ Current behavior:
 - Whitespace inside strings is preserved.
 - JavaScript numbers `1` and `1.0` hash the same because they are the same numeric value.
 - Unicode strings are not normalized; composed and decomposed forms hash differently.
-- Non-JSON values follow `JSON.stringify` behavior and should not be used in approval payloads.
+- Payloads reject `undefined`, `NaN`, infinities, negative zero, `bigint`, functions, and symbols rather than coercing or omitting them.
+- Payloads reject dates and other non-plain objects, sparse arrays, custom array properties, accessors, non-enumerable properties, and cyclic or shared object references.
+
+Rejecting these values prevents a JavaScript executor from receiving arguments whose semantics differ from the JSON payload a human approved. Callers must convert supported input to plain JSON data before requesting approval.
 
 Future work should either adopt RFC 8785-compatible canonicalization or formally define an Ananke canonical payload profile for all supported client languages.
 

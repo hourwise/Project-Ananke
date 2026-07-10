@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** Solid Phase 1 prototype. 54 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
+**Status:** Solid Phase 1 prototype. 60 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
 
 ## What Is Solid
 
@@ -10,20 +10,20 @@
 | Approval binding | SHA-256 over deterministic canonical JSON, hash mismatch blocks execution |
 | Policy engine | Deterministic risk-class-based defaults, configurable per tool and policy file |
 | Audit log | In-memory and SQLite backends, pluggable via `IAuditLog` |
-| MCP adapter | Stdio client adapter with a working filesystem demo |
-| Testbench | 7 must-pass scenarios across 5 domains, 54 unit tests |
+| MCP adapter | Stdio client adapter with local filesystem and official reference-server coverage |
+| Testbench | 7 must-pass scenarios across 5 domains, 60 tests |
 | CI | Build, unit tests, scenario benchmark, and filesystem MCP demo on push |
 
 ## In Progress
 
 | Area | Priority |
 |------|----------|
-| MCP adapter validation | Test with real MCP servers beyond the local demo |
+| MCP adapter validation | Automated real-stdio coverage for the filesystem demo and pinned official Everything reference server; broader matrix pending |
 | Validation reporting | Generate downloadable JSON/CSV reports for local and CI runs |
 | Ecosystem compatibility plan | Prepare Ananke + Mnemosyne + Runtime Contracts validation shape |
 | Environment check | Implemented locally and in CI; expand into guided remediation later |
 | Agent SDK | Client library wrapping the agent loop for Claude/GPT/Gemini |
-| CI hardening | Add broader MCP server matrix after filesystem demo |
+| CI hardening | Official reference-server test runs in CI; add a broader MCP server matrix |
 
 ## Next Milestone
 

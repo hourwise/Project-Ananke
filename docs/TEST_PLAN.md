@@ -62,6 +62,7 @@ Every major capability should have bundled validation suites, not just isolated 
 | Cross-platform cases | Windows, Linux, macOS, Node versions, SQLite behavior |
 | Human approval flow | Pending, approved, rejected, expired, used, tampered approval |
 | Audit integrity | Every governed action leaves durable evidence |
+| MCP adapter compatibility | Local filesystem demo plus pinned official Everything reference server over stdio |
 | Ecosystem compatibility | Ananke, Mnemosyne, and Runtime Contracts running together |
 
 New security issue = new permanent regression test.

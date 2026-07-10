@@ -81,7 +81,7 @@ npm install
 npm run validate:env                 # preflight diagnostics, writes environment report
 npm run validate:quick               # build, tests, benchmark, filesystem demo, reports
 npm run build
-npm test                            # 54 tests
+npm test                            # 60 tests
 npm run test:bench                  # writes validation-reports/*.json and *.csv
 npm run demo:filesystem             # MCP demo, also writes validation-reports/*.json and *.csv
 npx tsx examples/mock-mcp-server/index.ts
@@ -163,7 +163,7 @@ Runtime Contracts should not contain engines, persistence, policies, databases, 
 
 ## Current Status
 
-Solid Phase 1 prototype. 54 tests pass across 5 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
+Solid Phase 1 prototype. 60 tests pass across 6 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
 
 | What works | What is next |
 |-----------|--------------|
