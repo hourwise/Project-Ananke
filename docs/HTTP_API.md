@@ -13,7 +13,7 @@ Ananke exposes a REST API for tool execution, approvals, and audit queries.
 | `GET` | `/api/approvals` | List pending approval grants; requires approval operator auth |
 | `POST` | `/api/approvals/:id/approve` | Approve a pending grant; requires approval operator auth |
 | `POST` | `/api/approvals/:id/reject` | Reject a pending grant; requires approval operator auth |
-| `GET` | `/api/audit` | Query audit log - `?toolName=&eventType=&since=&limit=` |
+| `GET` | `/api/audit` | Query audit log; requires approval operator auth - `?toolName=&eventType=&since=&limit=` |
 | `GET` | `/api/stats` | Runtime stats - executed, failed, denied, pending approvals |
 
 ## Execute Response
@@ -31,6 +31,12 @@ The `/api/execute` endpoint returns an outcome envelope:
   }
 }
 ```
+
+## Audit Query
+
+`GET /api/audit` requires the same authenticated operator token as the approval API because audit events can contain tool arguments and approval metadata.
+
+Optional filters are `toolName`, `eventType`, and `since` (an ISO 8601 timestamp). `limit` defaults to 100 and accepts integers from 1 through 500. Invalid filters return `400` rather than being passed to the audit backend.
 
 When approval is required, the response includes `approvalGrantId`:
 

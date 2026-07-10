@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 import type { Gateway } from './index.js';
 import { canonicalJson } from '@ananke/authority-engine';
-import type { OperatorIdentity } from '@ananke/schema';
+import { AuditEventType, type OperatorIdentity } from '@ananke/schema';
+
+const DEFAULT_AUDIT_QUERY_LIMIT = 100;
+const MAX_AUDIT_QUERY_LIMIT = 500;
 
 function approvalResponse(gateway: Gateway, approval: NonNullable<ReturnType<Gateway['approvals']['get']>>) {
   const tool = gateway.registry.get(approval.toolName);
@@ -113,22 +116,36 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
   // ── Audit ────────────────────────────────────────────────
 
   router.get('/audit', (c) => {
-    const toolName = c.req.query('toolName');
-    const eventType = c.req.query('eventType') as
-      | 'TOOL_CALL_REQUESTED'
-      | 'POLICY_CHECKED'
-      | 'APPROVAL_REQUESTED'
-      | 'APPROVAL_GRANTED'
-      | 'APPROVAL_DENIED'
-      | 'APPROVAL_INVALIDATED'
-      | 'TOOL_EXECUTED'
-      | 'TOOL_FAILED'
-      | 'OUTCOME_GENERATED'
-      | undefined;
-    const since = c.req.query('since');
-    const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!) : undefined;
+    const operator = requireOperator(gateway, c.req.header('authorization'));
+    if (!operator) {
+      return c.json({ error: 'Missing or invalid audit operator token' }, 401);
+    }
 
-    return c.json(gateway.audit.query({ toolName, eventType, since, limit }));
+    const toolName = c.req.query('toolName');
+    const requestedEventType = c.req.query('eventType');
+    const eventType = requestedEventType ? AuditEventType.safeParse(requestedEventType) : undefined;
+    if (eventType && !eventType.success) {
+      return c.json({ error: 'Invalid eventType filter' }, 400);
+    }
+
+    const since = c.req.query('since');
+    if (since && Number.isNaN(Date.parse(since))) {
+      return c.json({ error: 'Invalid since filter; use an ISO 8601 timestamp' }, 400);
+    }
+
+    const requestedLimit = c.req.query('limit');
+    let limit = DEFAULT_AUDIT_QUERY_LIMIT;
+    if (requestedLimit) {
+      if (!/^\d+$/.test(requestedLimit)) {
+        return c.json({ error: 'Invalid limit; use a positive integer' }, 400);
+      }
+      limit = Number(requestedLimit);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_AUDIT_QUERY_LIMIT) {
+        return c.json({ error: 'Invalid limit; use an integer between 1 and 500' }, 400);
+      }
+    }
+
+    return c.json(gateway.audit.query({ toolName, eventType: eventType?.data, since, limit }));
   });
 
   // ── Health / Stats ───────────────────────────────────────

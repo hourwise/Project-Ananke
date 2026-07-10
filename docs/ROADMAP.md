@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** Solid Phase 1 prototype. 51 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
+**Status:** Solid Phase 1 prototype. 54 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
 
 ## What Is Solid
 
@@ -11,7 +11,7 @@
 | Policy engine | Deterministic risk-class-based defaults, configurable per tool and policy file |
 | Audit log | In-memory and SQLite backends, pluggable via `IAuditLog` |
 | MCP adapter | Stdio client adapter with a working filesystem demo |
-| Testbench | 7 must-pass scenarios across 5 domains, 51 unit tests |
+| Testbench | 7 must-pass scenarios across 5 domains, 54 unit tests |
 | CI | Build, unit tests, scenario benchmark, and filesystem MCP demo on push |
 
 ## In Progress
@@ -51,7 +51,7 @@ Phase 1 governs whether a tool call may execute and whether a side effect is aut
 | Approval dashboard flow | Implemented: pending queue, approve/reject API, readable arguments, canonical payload, hash display |
 | Dashboard auth/session hardening | Implemented for local development: bearer-token guard, authenticated operator identity, spoofing tests, audit metadata |
 | Policy file loading | Implemented: auto-discovery for `ananke.policy.yaml`, `ananke.policy.yml`, and `ananke.policy.json` |
-| Audit query API | Future Phase 1 hardening |
+| Audit query API | Implemented: authenticated HTTP query API with validated filters and bounded pagination |
 | Validation report export | Implemented for scenario benchmark and filesystem demo JSON/CSV |
 | GitHub report workflow | Future Phase 1 hardening: user-approved anonymised report submission |
 

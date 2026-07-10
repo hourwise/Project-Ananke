@@ -452,3 +452,54 @@ describe('Gateway approval API', () => {
     expect(gw.approvals.get(requested.approvalGrantId!)?.status).toBe('pending');
   });
 });
+
+describe('Gateway audit API', () => {
+  it('requires an authenticated operator because audit events can contain tool arguments', async () => {
+    const gw = createGateway();
+    await gw.execute('calendar.list_events', { calendarId: 'private-calendar' });
+
+    const routes = createGatewayRoutes(gw);
+    const response = await routes.request('/audit');
+
+    expect(response.status).toBe(401);
+  });
+
+  it('returns authenticated, filtered audit events', async () => {
+    const gw = createGateway();
+    await gw.execute('calendar.list_events', {});
+    await gw.execute('gmail.send_email', { to: 'a@b.com', subject: 'S', body: 'B' });
+
+    const routes = createGatewayRoutes(gw);
+    const response = await routes.request('/audit?eventType=APPROVAL_REQUESTED', {
+      headers: APPROVAL_AUTH_HEADERS,
+    });
+
+    expect(response.status).toBe(200);
+    const events = await response.json() as Array<{ eventType: string; toolName: string }>;
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      eventType: 'APPROVAL_REQUESTED',
+      toolName: 'gmail.send_email',
+    });
+  });
+
+  it('rejects invalid audit query filters', async () => {
+    const gw = createGateway();
+    const routes = createGatewayRoutes(gw);
+
+    const invalidEventType = await routes.request('/audit?eventType=NOT_A_REAL_EVENT', {
+      headers: APPROVAL_AUTH_HEADERS,
+    });
+    expect(invalidEventType.status).toBe(400);
+
+    const invalidSince = await routes.request('/audit?since=not-a-timestamp', {
+      headers: APPROVAL_AUTH_HEADERS,
+    });
+    expect(invalidSince.status).toBe(400);
+
+    const invalidLimit = await routes.request('/audit?limit=501', {
+      headers: APPROVAL_AUTH_HEADERS,
+    });
+    expect(invalidLimit.status).toBe(400);
+  });
+});
