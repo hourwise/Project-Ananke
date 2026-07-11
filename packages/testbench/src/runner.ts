@@ -117,6 +117,7 @@ const BENCH_OPERATOR: OperatorIdentity = {
   displayName: 'Ananke Testbench',
   sessionId: 'testbench-session',
   authMethod: 'dev-token',
+  roles: ['admin'],
   authenticatedAt: '2026-01-01T00:00:00.000Z',
 };
 

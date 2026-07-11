@@ -10,6 +10,7 @@ const TEST_OPERATOR = {
   displayName: 'Test Operator',
   sessionId: 'test-session',
   authMethod: 'dev-token' as const,
+  roles: ['admin' as const],
   authenticatedAt: '2026-01-01T00:00:00.000Z',
 };
 
@@ -384,6 +385,7 @@ describe('Gateway approval API', () => {
       operatorId: 'local-dashboard',
       sessionId: 'local-dev-session',
       authMethod: 'dev-token',
+      operatorRoles: ['admin'],
     });
 
     const afterApproval = await gw.execute('gmail.send_email', args, {
@@ -414,6 +416,7 @@ describe('Gateway approval API', () => {
       operatorId: 'local-dashboard',
       sessionId: 'local-dev-session',
       authMethod: 'dev-token',
+      operatorRoles: ['admin'],
     });
 
     const afterRejection = await gw.execute('gmail.send_email', args, {
@@ -501,5 +504,76 @@ describe('Gateway audit API', () => {
       headers: APPROVAL_AUTH_HEADERS,
     });
     expect(invalidLimit.status).toBe(400);
+  });
+});
+
+describe('Gateway operator RBAC', () => {
+  const tokens = {
+    'viewer-token': { operatorId: 'viewer-1', sessionId: 'viewer-session', roles: ['viewer' as const] },
+    'approver-token': { operatorId: 'approver-1', sessionId: 'approver-session', roles: ['approver' as const] },
+    'auditor-token': { operatorId: 'auditor-1', sessionId: 'auditor-session', roles: ['auditor' as const] },
+  };
+
+  function headers(token: string): Record<string, string> {
+    return { authorization: `Bearer ${token}` };
+  }
+
+  it('exposes the authenticated principal and effective permissions', async () => {
+    const routes = createGatewayRoutes(new Gateway({ operatorAuth: { tokens } }));
+    const response = await routes.request('/auth/me', { headers: headers('approver-token') });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      operatorId: 'approver-1',
+      sessionId: 'approver-session',
+      roles: ['approver'],
+      permissions: ['approvals:read', 'approvals:decide', 'stats:read'],
+    });
+  });
+
+  it('allows approvers to decide approvals but denies access to audit data', async () => {
+    const gw = new Gateway({ operatorAuth: { tokens } });
+    const { grant } = gw.approvals.requestApproval('example.write', { value: 1 });
+    const routes = createGatewayRoutes(gw);
+
+    const approve = await routes.request(`/approvals/${grant.id}/approve`, {
+      method: 'POST',
+      headers: headers('approver-token'),
+    });
+    expect(approve.status).toBe(200);
+    expect(gw.approvals.get(grant.id)?.approvedBy).toBe('approver-1');
+
+    const audit = await routes.request('/audit', { headers: headers('approver-token') });
+    expect(audit.status).toBe(403);
+  });
+
+  it('allows auditors to read audit data but denies approval decisions', async () => {
+    const gw = new Gateway({ operatorAuth: { tokens } });
+    const { grant } = gw.approvals.requestApproval('example.write', { value: 1 });
+    const routes = createGatewayRoutes(gw);
+
+    const audit = await routes.request('/audit', { headers: headers('auditor-token') });
+    expect(audit.status).toBe(200);
+
+    const approve = await routes.request(`/approvals/${grant.id}/approve`, {
+      method: 'POST',
+      headers: headers('auditor-token'),
+    });
+    expect(approve.status).toBe(403);
+    expect(gw.approvals.get(grant.id)?.status).toBe('pending');
+  });
+
+  it('limits viewers to runtime statistics', async () => {
+    const gw = new Gateway({ operatorAuth: { tokens } });
+    const routes = createGatewayRoutes(gw);
+
+    expect((await routes.request('/stats', { headers: headers('viewer-token') })).status).toBe(200);
+    expect((await routes.request('/approvals', { headers: headers('viewer-token') })).status).toBe(403);
+    expect((await routes.request('/audit', { headers: headers('viewer-token') })).status).toBe(403);
+  });
+
+  it('requires authentication for runtime statistics', async () => {
+    const routes = createGatewayRoutes(new Gateway({ operatorAuth: { tokens } }));
+    expect((await routes.request('/stats')).status).toBe(401);
   });
 });

@@ -31,6 +31,10 @@ npm run dev:gateway
 
 The gateway auto-loads the first matching file. Use `new Gateway({ policyFile: "./config/ananke.policy.yaml" })` for an explicit path, or `autoLoadPolicy: false` to disable discovery.
 
+## Production Operator Authentication
+
+Do not expose the bundled `dev-approval-token` outside localhost development. Configure `operatorAuth.mode` as `oidc` with a dedicated audience and the identity provider's JWKS endpoint. See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md) for the configuration and required claims.
+
 ## Connecting to MCP Servers
 
 See the [Quick Start](../README.md#quick-start) in the README for a complete example using the MCP adapter.

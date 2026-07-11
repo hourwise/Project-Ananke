@@ -83,7 +83,7 @@ npm install
 npm run validate:env                 # preflight diagnostics, writes environment report
 npm run validate:quick               # build, tests, benchmark, filesystem demo, reports
 npm run build
-npm test                            # 66 tests
+npm test                            # 75 tests
 npm run test:bench                  # writes validation-reports/*.json and *.csv
 npm run demo:filesystem             # MCP demo, also writes validation-reports/*.json and *.csv
 npx tsx examples/mock-mcp-server/index.ts
@@ -165,7 +165,7 @@ Runtime Contracts should not contain engines, persistence, policies, databases, 
 
 ## Current Status
 
-Solid Phase 1 prototype. 66 tests pass across 7 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
+Solid Phase 1 prototype. 75 tests pass across 8 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
 
 | What works | What is next |
 |-----------|--------------|
@@ -175,7 +175,7 @@ Solid Phase 1 prototype. 66 tests pass across 7 test files. All 7 must-pass safe
 | SQLite + in-memory audit | Agent SDK for Claude/GPT/Gemini |
 | MCP stdio adapter | Production-grade MCP server matrix |
 | Filesystem MCP demo | Content-sensitive read governance design |
-| Dashboard auth/session guard | Audit query API |
+| OIDC JWT operator authentication and RBAC | IdP login/logout and durable session lifecycle |
 | Policy file loading | Policy expressiveness |
 
 [Full roadmap ->](docs/ROADMAP.md)
@@ -192,6 +192,7 @@ Solid Phase 1 prototype. 66 tests pass across 7 test files. All 7 must-pass safe
 | [Outcome Envelope](docs/OUTCOME_ENVELOPE.md) | States, reason codes, recovery |
 | [Approval Binding](docs/APPROVAL_BINDING.md) | Canonical hashing and security |
 | [Approval UI Security](docs/APPROVAL_UI_SECURITY.md) | Requirements for safe human approval |
+| [Operator Authentication and RBAC](docs/AUTHENTICATION_AND_RBAC.md) | OIDC JWT verification, roles, and endpoint permissions |
 | [Risk Classes](docs/RISK_CLASSES.md) | Risk levels, defaults, and v1 limitations |
 | [Policy Configuration](docs/POLICY_CONFIGURATION.md) | `ananke.policy.yaml` and JSON policy overrides |
 | [HTTP API](docs/HTTP_API.md) | Endpoint reference |

@@ -98,12 +98,17 @@ export const Outcome = z.object({
 
 export type Outcome = z.infer<typeof Outcome>;
 
+export const OperatorRole = z.enum(['viewer', 'approver', 'auditor', 'admin']);
+
+export type OperatorRole = z.infer<typeof OperatorRole>;
+
 // Operator identity captured from authenticated dashboard/API context.
 export const OperatorIdentity = z.object({
   operatorId: z.string(),
   displayName: z.string().optional(),
   sessionId: z.string(),
-  authMethod: z.enum(['dev-token', 'basic']),
+  authMethod: z.enum(['dev-token', 'oidc-jwt']),
+  roles: z.array(OperatorRole).min(1),
   authenticatedAt: z.string(),
 });
 

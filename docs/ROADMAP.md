@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** Solid Phase 1 prototype. 66 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
+**Status:** Solid Phase 1 prototype. 75 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
 
 **Requirements baseline:** [Project Ananke Research and Requirements](PROJECT_ANANKE_RESEARCH_AND_REQUIREMENTS.md).
 
@@ -13,7 +13,7 @@
 | Policy engine | Deterministic risk-class-based defaults, configurable per tool and policy file |
 | Audit log | In-memory and SQLite backends, pluggable via `IAuditLog` |
 | MCP adapter | Stdio client adapter with local filesystem and official Everything and Memory reference-server coverage |
-| Testbench | 7 must-pass scenarios across 5 domains, 66 tests |
+| Testbench | 7 must-pass scenarios across 5 domains, 75 tests |
 | CI | Build, unit tests, scenario benchmark, and filesystem MCP demo on push |
 
 ## In Progress
@@ -51,7 +51,8 @@ Phase 1 governs whether a tool call may execute and whether a side effect is aut
 | MCP stdio adapter | Implemented |
 | Filesystem MCP demo | Implemented |
 | Approval dashboard flow | Implemented: pending queue, approve/reject API, readable arguments, canonical payload, hash display |
-| Dashboard auth/session hardening | Implemented for local development: bearer-token guard, authenticated operator identity, spoofing tests, audit metadata |
+| Dashboard auth/RBAC | Implemented: OIDC JWT verification, development-token mode, deny-by-default roles, endpoint permissions, authenticated operator identity, spoofing tests, and audit metadata |
+| Session lifecycle hardening | Future: IdP login/logout integration, immediate revocation, durable sessions, rotation workflows, and operator lifecycle controls |
 | Policy file loading | Implemented: auto-discovery for `ananke.policy.yaml`, `ananke.policy.yml`, and `ananke.policy.json` |
 | Expanded governance risk classes | Implemented: credential access, network egress, skill installation, and model-provider change require approval by default |
 | Audit query API | Implemented: authenticated HTTP query API with validated filters and bounded pagination |

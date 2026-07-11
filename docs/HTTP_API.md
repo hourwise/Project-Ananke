@@ -10,11 +10,12 @@ Ananke exposes a REST API for tool execution, approvals, and audit queries.
 | `GET` | `/api/tools` | List all registered tools with risk metadata |
 | `GET` | `/api/tools/:name` | Get a single tool's metadata |
 | `POST` | `/api/execute` | Execute a tool call - `{ toolName, arguments, approvalId? }` |
-| `GET` | `/api/approvals` | List pending approval grants; requires approval operator auth |
-| `POST` | `/api/approvals/:id/approve` | Approve a pending grant; requires approval operator auth |
-| `POST` | `/api/approvals/:id/reject` | Reject a pending grant; requires approval operator auth |
-| `GET` | `/api/audit` | Query audit log; requires approval operator auth - `?toolName=&eventType=&since=&limit=` |
-| `GET` | `/api/stats` | Runtime stats - executed, failed, denied, pending approvals |
+| `GET` | `/api/auth/me` | Verified operator identity, roles, and effective permissions |
+| `GET` | `/api/approvals` | List pending grants; requires `approvals:read` |
+| `POST` | `/api/approvals/:id/approve` | Approve a pending grant; requires `approvals:decide` |
+| `POST` | `/api/approvals/:id/reject` | Reject a pending grant; requires `approvals:decide` |
+| `GET` | `/api/audit` | Query audit log; requires `audit:read` - `?toolName=&eventType=&since=&limit=` |
+| `GET` | `/api/stats` | Runtime stats; requires `stats:read` |
 
 ## Execute Response
 
@@ -34,7 +35,7 @@ The `/api/execute` endpoint returns an outcome envelope:
 
 ## Audit Query
 
-`GET /api/audit` requires the same authenticated operator token as the approval API because audit events can contain tool arguments and approval metadata.
+`GET /api/audit` requires an authenticated operator with the `audit:read` permission because audit events can contain tool arguments and approval metadata.
 
 Optional filters are `toolName`, `eventType`, and `since` (an ISO 8601 timestamp). `limit` defaults to 100 and accepts integers from 1 through 500. Invalid filters return `400` rather than being passed to the audit backend.
 
@@ -58,13 +59,15 @@ The retry succeeds only after that grant is approved through the approval API or
 
 ## Approval Response
 
-Approval queue and decision endpoints require a local development operator token:
+Operator endpoints accept a signed OIDC JWT in production mode. The bundled local development mode accepts:
 
 ```http
 Authorization: Bearer dev-approval-token
 ```
 
 The approval API does not trust `approvedBy` or `rejectedBy` from the request body. Approver identity is derived from authenticated request context.
+
+See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md) for OIDC configuration, roles, claims, and permissions. Invalid credentials return `401`; valid credentials without the required permission return `403`.
 
 `GET /api/approvals` returns pending grants with dashboard-safe review fields:
 

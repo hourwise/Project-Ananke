@@ -25,13 +25,13 @@ This means the UI must make the readable content and the canonical payload relat
 
 Approval identity must come from authenticated dashboard/API context. The backend must ignore `approvedBy`, `rejectedBy`, operator ID, or session ID values supplied in the request body.
 
-For the current local development dashboard, approval queue and decision endpoints require:
+For the local development dashboard, approval queue and decision endpoints accept:
 
 ```http
 Authorization: Bearer dev-approval-token
 ```
 
-This token guard is for local development only. Production deployments need real authentication, authorization, session management, token rotation, and operator lifecycle controls.
+This token is for local development only. Production mode verifies signed OIDC JWTs and enforces the `viewer`, `approver`, `auditor`, and `admin` roles. Identity-provider login/logout integration, immediate revocation, durable session management, and operator lifecycle controls remain deployment work. See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md).
 
 ## Minimum Security Requirements
 

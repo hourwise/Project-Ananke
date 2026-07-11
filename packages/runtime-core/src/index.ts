@@ -9,27 +9,32 @@ import { executeTool, type ToolExecutor } from '@ananke/tool-router';
 import { classifyOutcome } from '@ananke/outcome-engine';
 import { AuditLog } from '@ananke/audit-engine';
 import { createGatewayRoutes } from './routes.js';
+import {
+  DevelopmentTokenAuthenticator,
+  OidcJwtAuthenticator,
+  type OidcAuthConfig,
+  type OperatorAuthenticator,
+  type OperatorProfile,
+} from './auth.js';
 import type { IAuditLog } from '@ananke/audit-engine';
 import type { ToolMetadata, Outcome, OperatorIdentity } from '@ananke/schema';
 
 export const DEFAULT_APPROVAL_DEV_TOKEN = 'dev-approval-token';
 
-export interface OperatorProfile {
-  operatorId: string;
-  displayName?: string;
-  sessionId?: string;
-}
-
-export interface ApprovalAuthConfig {
-  enabled?: boolean;
+export interface OperatorAuthConfig {
+  mode?: 'development' | 'oidc';
   tokens?: Record<string, OperatorProfile>;
+  oidc?: OidcAuthConfig;
+  authenticator?: OperatorAuthenticator;
 }
 
 export interface GatewayConfig {
   port?: number;
   mcpServers?: { name: string; url: string }[];
   audit?: IAuditLog;
-  approvalAuth?: ApprovalAuthConfig;
+  operatorAuth?: OperatorAuthConfig;
+  /** @deprecated Use operatorAuth. */
+  approvalAuth?: OperatorAuthConfig;
   policyFile?: string;
   autoLoadPolicy?: boolean;
 }
@@ -56,26 +61,30 @@ export class Gateway {
     port: number;
     mcpServers: { name: string; url: string }[];
     audit: IAuditLog;
-    approvalAuth: Required<ApprovalAuthConfig>;
+    operatorAuthenticator: OperatorAuthenticator;
     policyFile?: string;
     autoLoadPolicy: boolean;
   };
 
   constructor(config: GatewayConfig = {}) {
-    this.config = {
-      port: config.port ?? 3000,
-      mcpServers: config.mcpServers ?? [],
-      audit: config.audit ?? new AuditLog(),
-      approvalAuth: {
-        enabled: config.approvalAuth?.enabled ?? true,
-        tokens: config.approvalAuth?.tokens ?? {
+    const operatorAuth = config.operatorAuth ?? config.approvalAuth;
+    const operatorAuthenticator = operatorAuth?.authenticator
+      ?? (operatorAuth?.mode === 'oidc'
+        ? new OidcJwtAuthenticator(requiredOidcConfig(operatorAuth.oidc))
+        : new DevelopmentTokenAuthenticator(operatorAuth?.tokens ?? {
           [DEFAULT_APPROVAL_DEV_TOKEN]: {
             operatorId: 'local-dashboard',
             displayName: 'Local Dashboard',
             sessionId: 'local-dev-session',
+            roles: ['admin'],
           },
-        },
-      },
+        }));
+
+    this.config = {
+      port: config.port ?? 3000,
+      mcpServers: config.mcpServers ?? [],
+      audit: config.audit ?? new AuditLog(),
+      operatorAuthenticator,
       policyFile: config.policyFile,
       autoLoadPolicy: config.autoLoadPolicy ?? true,
     };
@@ -111,30 +120,8 @@ export class Gateway {
     this.executors.set(toolName, executor);
   }
 
-  authenticateOperator(authorizationHeader?: string): OperatorIdentity | undefined {
-    if (!this.config.approvalAuth.enabled) {
-      return {
-        operatorId: 'auth-disabled',
-        displayName: 'Auth Disabled',
-        sessionId: 'auth-disabled-session',
-        authMethod: 'dev-token',
-        authenticatedAt: new Date().toISOString(),
-      };
-    }
-
-    const match = authorizationHeader?.match(/^Bearer\s+(.+)$/i);
-    if (!match) return undefined;
-
-    const profile = this.config.approvalAuth.tokens[match[1]!.trim()];
-    if (!profile) return undefined;
-
-    return {
-      operatorId: profile.operatorId,
-      displayName: profile.displayName,
-      sessionId: profile.sessionId ?? crypto.randomUUID(),
-      authMethod: 'dev-token',
-      authenticatedAt: new Date().toISOString(),
-    };
+  authenticateOperator(authorizationHeader?: string): Promise<OperatorIdentity | undefined> {
+    return this.config.operatorAuthenticator.authenticate(authorizationHeader);
   }
 
   /**
@@ -273,3 +260,21 @@ export class Gateway {
     });
   }
 }
+
+function requiredOidcConfig(config?: OidcAuthConfig): OidcAuthConfig {
+  if (!config) {
+    throw new Error('operatorAuth.oidc is required when operatorAuth.mode is "oidc"');
+  }
+  return config;
+}
+
+export {
+  DevelopmentTokenAuthenticator,
+  OidcJwtAuthenticator,
+  hasOperatorPermission,
+  permissionsForOperator,
+  type OidcAuthConfig,
+  type OperatorAuthenticator,
+  type OperatorPermission,
+  type OperatorProfile,
+} from './auth.js';

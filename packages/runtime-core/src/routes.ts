@@ -2,6 +2,11 @@ import { Hono } from 'hono';
 import type { Gateway } from './index.js';
 import { canonicalJson } from '@ananke/authority-engine';
 import { AuditEventType, type OperatorIdentity } from '@ananke/schema';
+import {
+  hasOperatorPermission,
+  permissionsForOperator,
+  type OperatorPermission,
+} from './auth.js';
 
 const DEFAULT_AUDIT_QUERY_LIMIT = 100;
 const MAX_AUDIT_QUERY_LIMIT = 500;
@@ -15,8 +20,29 @@ function approvalResponse(gateway: Gateway, approval: NonNullable<ReturnType<Gat
   };
 }
 
-function requireOperator(gateway: Gateway, authorizationHeader?: string): OperatorIdentity | undefined {
+async function requireOperator(
+  gateway: Gateway,
+  authorizationHeader?: string,
+): Promise<OperatorIdentity | undefined> {
   return gateway.authenticateOperator(authorizationHeader);
+}
+
+async function authorizeOperator(
+  gateway: Gateway,
+  authorizationHeader: string | undefined,
+  permission: OperatorPermission,
+): Promise<
+  | { operator: OperatorIdentity }
+  | { status: 401 | 403; error: string }
+> {
+  const operator = await requireOperator(gateway, authorizationHeader);
+  if (!operator) {
+    return { status: 401, error: 'Missing, invalid, or expired operator credential' };
+  }
+  if (!hasOperatorPermission(operator, permission)) {
+    return { status: 403, error: `Operator lacks required permission: ${permission}` };
+  }
+  return { operator };
 }
 
 function decisionMetadata(decision: 'approved' | 'rejected', operator: OperatorIdentity): Record<string, unknown> {
@@ -26,6 +52,7 @@ function decisionMetadata(decision: 'approved' | 'rejected', operator: OperatorI
     operatorDisplayName: operator.displayName,
     sessionId: operator.sessionId,
     authMethod: operator.authMethod,
+    operatorRoles: operator.roles,
     decidedAt: new Date().toISOString(),
   };
 }
@@ -62,21 +89,35 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
 
   // ── Approvals ────────────────────────────────────────────
 
-  router.get('/approvals', (c) => {
-    const operator = requireOperator(gateway, c.req.header('authorization'));
+  router.get('/auth/me', async (c) => {
+    const operator = await requireOperator(gateway, c.req.header('authorization'));
     if (!operator) {
-      return c.json({ error: 'Missing or invalid approval operator token' }, 401);
+      return c.json({ error: 'Missing, invalid, or expired operator credential' }, 401);
     }
+
+    return c.json({ ...operator, permissions: permissionsForOperator(operator) });
+  });
+
+  router.get('/approvals', async (c) => {
+    const authorization = await authorizeOperator(
+      gateway,
+      c.req.header('authorization'),
+      'approvals:read',
+    );
+    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
 
     return c.json(gateway.approvals.pending().map((approval) => approvalResponse(gateway, approval)));
   });
 
   router.post('/approvals/:id/approve', async (c) => {
     const id = c.req.param('id');
-    const operator = requireOperator(gateway, c.req.header('authorization'));
-    if (!operator) {
-      return c.json({ error: 'Missing or invalid approval operator token' }, 401);
-    }
+    const authorization = await authorizeOperator(
+      gateway,
+      c.req.header('authorization'),
+      'approvals:decide',
+    );
+    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    const { operator } = authorization;
 
     const grant = gateway.approvals.approve(id, operator);
 
@@ -94,10 +135,13 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
 
   router.post('/approvals/:id/reject', async (c) => {
     const id = c.req.param('id');
-    const operator = requireOperator(gateway, c.req.header('authorization'));
-    if (!operator) {
-      return c.json({ error: 'Missing or invalid approval operator token' }, 401);
-    }
+    const authorization = await authorizeOperator(
+      gateway,
+      c.req.header('authorization'),
+      'approvals:decide',
+    );
+    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    const { operator } = authorization;
 
     const grant = gateway.approvals.reject(id, operator);
 
@@ -115,11 +159,13 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
 
   // ── Audit ────────────────────────────────────────────────
 
-  router.get('/audit', (c) => {
-    const operator = requireOperator(gateway, c.req.header('authorization'));
-    if (!operator) {
-      return c.json({ error: 'Missing or invalid audit operator token' }, 401);
-    }
+  router.get('/audit', async (c) => {
+    const authorization = await authorizeOperator(
+      gateway,
+      c.req.header('authorization'),
+      'audit:read',
+    );
+    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
 
     const toolName = c.req.query('toolName');
     const requestedEventType = c.req.query('eventType');
@@ -150,7 +196,14 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
 
   // ── Health / Stats ───────────────────────────────────────
 
-  router.get('/stats', (c) => {
+  router.get('/stats', async (c) => {
+    const authorization = await authorizeOperator(
+      gateway,
+      c.req.header('authorization'),
+      'stats:read',
+    );
+    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+
     const events = gateway.audit.all();
     const executed = events.filter((e) => e.eventType === 'TOOL_EXECUTED').length;
     const failed = events.filter((e) => e.eventType === 'TOOL_FAILED').length;

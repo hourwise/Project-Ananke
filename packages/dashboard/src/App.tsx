@@ -34,13 +34,21 @@ interface Approval {
   rejectedAt?: string;
 }
 
-const API = 'http://localhost:3000/api';
-const DEV_OPERATOR_TOKEN = localStorage.getItem('ananke.operatorToken') ?? 'dev-approval-token';
-const OPERATOR_SESSION_LABEL = 'local-dev-session';
+interface Operator {
+  operatorId: string;
+  displayName?: string;
+  sessionId: string;
+  authMethod: 'dev-token' | 'oidc-jwt';
+  roles: Array<'viewer' | 'approver' | 'auditor' | 'admin'>;
+  permissions: string[];
+}
 
-function authHeaders(): HeadersInit {
+const API = 'http://localhost:3000/api';
+const INITIAL_OPERATOR_TOKEN = sessionStorage.getItem('ananke.operatorToken') ?? 'dev-approval-token';
+
+function authHeaders(token: string): HeadersInit {
   return {
-    authorization: `Bearer ${DEV_OPERATOR_TOKEN}`,
+    authorization: `Bearer ${token}`,
   };
 }
 
@@ -50,30 +58,57 @@ function App() {
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [tab, setTab] = useState<'audit' | 'approvals'>('audit');
   const [message, setMessage] = useState<string | null>(null);
+  const [operator, setOperator] = useState<Operator | null>(null);
+  const [operatorToken, setOperatorToken] = useState(INITIAL_OPERATOR_TOKEN);
 
-  async function refresh(): Promise<void> {
+  async function refresh(token = operatorToken): Promise<void> {
+    const meResponse = await fetch(`${API}/auth/me`, { headers: authHeaders(token) });
+    if (!meResponse.ok) {
+      setOperator(null);
+      setStats(null);
+      setAudit([]);
+      setApprovals([]);
+      setMessage('Authentication failed. Supply a valid development token or OIDC access token.');
+      return;
+    }
+
+    const authenticatedOperator = await meResponse.json() as Operator;
+    setOperator(authenticatedOperator);
+    const can = (permission: string) => authenticatedOperator.permissions.includes(permission);
+    setTab((current) => {
+      if (current === 'audit' && !can('audit:read') && can('approvals:read')) return 'approvals';
+      if (current === 'approvals' && !can('approvals:read') && can('audit:read')) return 'audit';
+      return current;
+    });
+
     const [statsRes, auditRes, approvalsRes] = await Promise.all([
-      fetch(`${API}/stats`, { headers: authHeaders() }),
-      fetch(`${API}/audit?limit=50`, { headers: authHeaders() }),
-      fetch(`${API}/approvals`, { headers: authHeaders() }),
+      can('stats:read') ? fetch(`${API}/stats`, { headers: authHeaders(token) }) : undefined,
+      can('audit:read') ? fetch(`${API}/audit?limit=50`, { headers: authHeaders(token) }) : undefined,
+      can('approvals:read') ? fetch(`${API}/approvals`, { headers: authHeaders(token) }) : undefined,
     ]);
-    setStats(await statsRes.json());
-    setAudit(await auditRes.json());
-    setApprovals(await approvalsRes.json());
+    setStats(statsRes?.ok ? await statsRes.json() as Stats : null);
+    setAudit(auditRes?.ok ? await auditRes.json() as AuditEvent[] : []);
+    setApprovals(approvalsRes?.ok ? await approvalsRes.json() as Approval[] : []);
   }
 
   useEffect(() => {
     void refresh();
     const interval = setInterval(() => void refresh(), 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [operatorToken]);
+
+  function applyToken(): void {
+    sessionStorage.setItem('ananke.operatorToken', operatorToken);
+    setMessage(null);
+    void refresh(operatorToken);
+  }
 
   async function decideApproval(id: string, decision: 'approve' | 'reject'): Promise<void> {
     setMessage(null);
 
     const response = await fetch(`${API}/approvals/${id}/${decision}`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(operatorToken),
     });
 
     if (!response.ok) {
@@ -109,6 +144,30 @@ function App() {
         </p>
       </header>
 
+      <section style={{ ...cardStyle, marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
+          <label style={{ flex: 1, minWidth: 280 }}>
+            <div style={labelStyle}>Operator access token</div>
+            <input
+              type="password"
+              value={operatorToken}
+              onChange={(event) => setOperatorToken(event.target.value)}
+              style={tokenInputStyle}
+              autoComplete="off"
+            />
+          </label>
+          <button style={tabBtn(true)} onClick={applyToken}>Authenticate</button>
+        </div>
+        {operator && (
+          <div style={{ marginTop: 12, color: '#cbd5e1', fontSize: 13 }}>
+            Signed in as <strong>{operator.displayName ?? operator.operatorId}</strong>
+            {' · '}roles: {operator.roles.join(', ')}
+            {' · '}session: {operator.sessionId}
+            {' · '}{operator.authMethod}
+          </div>
+        )}
+      </section>
+
       {stats && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
           {[
@@ -126,12 +185,16 @@ function App() {
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button onClick={() => setTab('approvals')} style={tabBtn(tab === 'approvals')}>
-          Approval Queue
-        </button>
-        <button onClick={() => setTab('audit')} style={tabBtn(tab === 'audit')}>
-          Audit Log
-        </button>
+        {operator?.permissions.includes('approvals:read') && (
+          <button onClick={() => setTab('approvals')} style={tabBtn(tab === 'approvals')}>
+            Approval Queue
+          </button>
+        )}
+        {operator?.permissions.includes('audit:read') && (
+          <button onClick={() => setTab('audit')} style={tabBtn(tab === 'audit')}>
+            Audit Log
+          </button>
+        )}
       </div>
 
       {message && <div style={messageStyle}>{message}</div>}
@@ -152,17 +215,25 @@ function App() {
                     Requested: {new Date(approval.requestedAt).toLocaleString()}
                   </div>
                   <div style={{ color: '#94a3b8', fontSize: 13 }}>
-                    Approving session: {OPERATOR_SESSION_LABEL}
+                    Approving session: {operator?.sessionId}
                   </div>
                   <div style={{ color: '#94a3b8', fontSize: 13 }}>
-                    Identity source: authenticated dev token
+                    Identity source: {operator?.authMethod}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <button style={approveBtn} onClick={() => void decideApproval(approval.id, 'approve')}>
+                  <button
+                    style={approveBtn}
+                    disabled={!operator?.permissions.includes('approvals:decide')}
+                    onClick={() => void decideApproval(approval.id, 'approve')}
+                  >
                     Approve
                   </button>
-                  <button style={rejectBtn} onClick={() => void decideApproval(approval.id, 'reject')}>
+                  <button
+                    style={rejectBtn}
+                    disabled={!operator?.permissions.includes('approvals:decide')}
+                    onClick={() => void decideApproval(approval.id, 'reject')}
+                  >
                     Reject
                   </button>
                 </div>
@@ -287,6 +358,16 @@ const preStyle: React.CSSProperties = {
   border: '1px solid rgba(148, 163, 184, 0.18)',
   color: '#dbeafe',
   fontSize: 12,
+};
+
+const tokenInputStyle: React.CSSProperties = {
+  boxSizing: 'border-box',
+  width: '100%',
+  padding: '10px 12px',
+  borderRadius: 10,
+  border: '1px solid rgba(148, 163, 184, 0.35)',
+  background: '#020617',
+  color: '#f8fafc',
 };
 
 const hashStyle: React.CSSProperties = {

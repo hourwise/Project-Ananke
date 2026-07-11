@@ -23,7 +23,7 @@ Ananke only governs tool calls that pass through the Ananke Gateway. If an agent
 - Phase 1 does not provide content-sensitive read classification.
 - Phase 1 does not provide full information-flow control.
 - Current canonical hashing is deterministic but not RFC 8785-complete.
-- Approval UI has a local development token guard and records operator/session metadata, but production SSO, RBAC, rotation, and durable session management are not implemented yet.
+- Operator APIs support signed OIDC JWT verification and deny-by-default RBAC. IdP-specific SSO login/logout, immediate revocation, rotation workflows, and durable session management are not implemented yet.
 
 ## Reporting Security Issues
 
