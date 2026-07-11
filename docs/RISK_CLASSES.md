@@ -11,6 +11,10 @@ Ananke classifies every registered tool into a deterministic risk class. The ris
 | `PAYMENT` | REQUIRE_APPROVAL | `stripe.charge`, `invoice.send` |
 | `DEPLOYMENT` | REQUIRE_APPROVAL | `vercel.deploy`, `kubectl.apply` |
 | `PERMISSION_CHANGE` | REQUIRE_APPROVAL | `iam.grant_role`, `acl.modify` |
+| `CREDENTIAL_ACCESS` | REQUIRE_APPROVAL | `vault.read_secret`, `oauth.export_token` |
+| `NETWORK_EGRESS` | REQUIRE_APPROVAL | `http.post_external`, `webhook.deliver` |
+| `SKILL_INSTALL` | REQUIRE_APPROVAL | `skill.install`, `plugin.enable` |
+| `MODEL_PROVIDER_CHANGE` | REQUIRE_APPROVAL | `model.switch_provider`, `model.change_endpoint` |
 | `UNKNOWN` | DENY | Any unregistered tool |
 
 Override defaults per tool through policy configuration.
@@ -28,3 +32,4 @@ This means Phase 1 can govern whether a tool is allowed to execute, but it does 
 - Prefer narrow tools over generic shell/database/filesystem tools.
 - Use policy overrides when a tool's identity alone is too coarse.
 - Do not expose raw tool credentials to agents; risk classification only matters on paths that pass through Ananke.
+- Treat skill installation, credential access, network egress, and model-provider changes as governed side effects until a more specific policy narrows their scope.

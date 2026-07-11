@@ -150,7 +150,7 @@ A few thematic possibilities:
 Themis — order, justice, balance (governance/orchestration)
 Hermes — messenger, routing, coordination
 Athena — strategy
-Moira — orchestration of fate (although you've already discussed Moira Code as the IDE)
+Moira — orchestration of fate (although you've already discussed Moirae Code as the IDE)
 
 The key is that it shouldn't route packets—it should coordinate systems.
 

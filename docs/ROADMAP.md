@@ -1,6 +1,8 @@
 # Roadmap
 
-**Status:** Solid Phase 1 prototype. 60 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
+**Status:** Solid Phase 1 prototype. 66 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
+
+**Requirements baseline:** [Project Ananke Research and Requirements](PROJECT_ANANKE_RESEARCH_AND_REQUIREMENTS.md).
 
 ## What Is Solid
 
@@ -10,20 +12,20 @@
 | Approval binding | SHA-256 over deterministic canonical JSON, hash mismatch blocks execution |
 | Policy engine | Deterministic risk-class-based defaults, configurable per tool and policy file |
 | Audit log | In-memory and SQLite backends, pluggable via `IAuditLog` |
-| MCP adapter | Stdio client adapter with local filesystem and official reference-server coverage |
-| Testbench | 7 must-pass scenarios across 5 domains, 60 tests |
+| MCP adapter | Stdio client adapter with local filesystem and official Everything and Memory reference-server coverage |
+| Testbench | 7 must-pass scenarios across 5 domains, 66 tests |
 | CI | Build, unit tests, scenario benchmark, and filesystem MCP demo on push |
 
 ## In Progress
 
 | Area | Priority |
 |------|----------|
-| MCP adapter validation | Automated real-stdio coverage for the filesystem demo and pinned official Everything reference server; broader matrix pending |
+| MCP adapter validation | Automated real-stdio coverage for the filesystem demo plus pinned official Everything and Memory reference servers; broader matrix still desirable |
 | Validation reporting | Generate downloadable JSON/CSV reports for local and CI runs |
 | Ecosystem compatibility plan | Prepare Ananke + Mnemosyne + Runtime Contracts validation shape |
 | Environment check | Implemented locally and in CI; expand into guided remediation later |
 | Agent SDK | Client library wrapping the agent loop for Claude/GPT/Gemini |
-| CI hardening | Official reference-server test runs in CI; add a broader MCP server matrix |
+| CI hardening | Filesystem, Everything, and Memory MCP adapter tests run in CI; add further server families as needed |
 
 ## Next Milestone
 
@@ -51,8 +53,10 @@ Phase 1 governs whether a tool call may execute and whether a side effect is aut
 | Approval dashboard flow | Implemented: pending queue, approve/reject API, readable arguments, canonical payload, hash display |
 | Dashboard auth/session hardening | Implemented for local development: bearer-token guard, authenticated operator identity, spoofing tests, audit metadata |
 | Policy file loading | Implemented: auto-discovery for `ananke.policy.yaml`, `ananke.policy.yml`, and `ananke.policy.json` |
+| Expanded governance risk classes | Implemented: credential access, network egress, skill installation, and model-provider change require approval by default |
 | Audit query API | Implemented: authenticated HTTP query API with validated filters and bounded pagination |
 | Validation report export | Implemented for scenario benchmark and filesystem demo JSON/CSV |
+| Development toolchain security | Implemented: Vitest 4.1.10 and Vite 8.1.4; `npm audit` reports zero vulnerabilities |
 | GitHub report workflow | Future Phase 1 hardening: user-approved anonymised report submission |
 
 ## Ecosystem Build Plan
@@ -83,7 +87,7 @@ Runtime Contracts must not contain engines, databases, persistence, policies, re
 |----------|---------|
 | Runtime identity | Standard `runtime`, `version`, and `protocolVersion` declaration |
 | Protocol version | Fast deterministic compatibility negotiation before execution |
-| Runtime names | Stable names for Ananke, Mnemosyne, Moira Code, and third-party runtimes |
+| Runtime names | Stable names for Ananke, Mnemosyne, Moirae Code, and third-party runtimes |
 | Validation report schema | Shared JSON/CSV shape for Ananke, Mnemosyne, and combined runs |
 | Capability manifest | Describes runtime capabilities, versions, and compatibility |
 | Health contract | Standard readiness and environment checks |

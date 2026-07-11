@@ -76,12 +76,14 @@ Ananke is built as focused engines, not a monolithic gateway. [Full architecture
 
 ## Quick Start
 
+Requires Node.js 22.12 or newer.
+
 ```bash
 npm install
 npm run validate:env                 # preflight diagnostics, writes environment report
 npm run validate:quick               # build, tests, benchmark, filesystem demo, reports
 npm run build
-npm test                            # 60 tests
+npm test                            # 66 tests
 npm run test:bench                  # writes validation-reports/*.json and *.csv
 npm run demo:filesystem             # MCP demo, also writes validation-reports/*.json and *.csv
 npx tsx examples/mock-mcp-server/index.ts
@@ -163,7 +165,7 @@ Runtime Contracts should not contain engines, persistence, policies, databases, 
 
 ## Current Status
 
-Solid Phase 1 prototype. 60 tests pass across 6 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
+Solid Phase 1 prototype. 66 tests pass across 7 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
 
 | What works | What is next |
 |-----------|--------------|
@@ -196,6 +198,7 @@ Solid Phase 1 prototype. 60 tests pass across 6 test files. All 7 must-pass safe
 | [Agent Integration](docs/AGENT_INTEGRATION.md) | Decision flow and TypeScript loop |
 | [Deployment](docs/DEPLOYMENT.md) | Build, run, SQLite audit |
 | [Vision](docs/VISION.md) | Long-term direction |
+| [Project Research and Requirements](docs/PROJECT_ANANKE_RESEARCH_AND_REQUIREMENTS.md) | Scope, requirements, acceptance evidence, and deferred decisions |
 | [Roadmap](docs/ROADMAP.md) | What is solid, in progress, next |
 | [Independent Architecture Review](docs/INDEPENDENT_ARCHITECTURE_REVIEW.md) | External design review input and resulting changes |
 | [ADR-0028 MCP Compatibility And Governance](docs/ADR-0028-MCP-COMPATIBILITY-AND-GOVERNANCE.md) | MCP connects tools; Ananke governs execution |

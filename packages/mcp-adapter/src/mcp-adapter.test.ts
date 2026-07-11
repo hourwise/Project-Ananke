@@ -9,6 +9,10 @@ const serverPath = fileURLToPath(new URL('../../../examples/filesystem-mcp-demo/
 const everythingServerPath = fileURLToPath(
   new URL('../../../node_modules/@modelcontextprotocol/server-everything/dist/index.js', import.meta.url),
 );
+const memoryServerPath = fileURLToPath(
+  new URL('../../../node_modules/@modelcontextprotocol/server-memory/dist/index.js', import.meta.url),
+);
+const MCP_SERVER_TIMEOUT_MS = 15_000;
 
 describe('McpAdapter with the filesystem MCP server', () => {
   let adapter: McpAdapter | undefined;
@@ -65,14 +69,14 @@ describe('McpAdapter with the filesystem MCP server', () => {
       bytes: 8,
     });
     await expect(readFile(join(workspaceDir!, 'note.txt'), 'utf8')).resolves.toBe('updated\n');
-  });
+  }, MCP_SERVER_TIMEOUT_MS);
 
   it('surfaces MCP tool errors to the gateway executor', async () => {
     const connected = await connect();
     const read = connected.executorFor('filesystem.read_file');
 
     await expect(read({ path: '../outside.txt' })).rejects.toThrow('MCP_TOOL_ERROR:');
-  });
+  }, MCP_SERVER_TIMEOUT_MS);
 });
 
 describe('McpAdapter with the official Everything MCP reference server', () => {
@@ -98,5 +102,46 @@ describe('McpAdapter with the official Everything MCP reference server', () => {
     await expect(echo({ message: 'Ananke MCP validation' })).resolves.toEqual({
       text: 'Echo: Ananke MCP validation',
     });
+  }, MCP_SERVER_TIMEOUT_MS);
+});
+
+describe('McpAdapter with the official Memory MCP reference server', () => {
+  let adapter: McpAdapter | undefined;
+  let memoryDir: string | undefined;
+
+  afterEach(async () => {
+    await adapter?.disconnect();
+    if (memoryDir) {
+      await rm(memoryDir, { recursive: true, force: true });
+    }
+    adapter = undefined;
+    memoryDir = undefined;
   });
+
+  it('executes stateful create and search tools over stdio', async () => {
+    memoryDir = await mkdtemp(join(tmpdir(), 'ananke-mcp-memory-test-'));
+    adapter = new McpAdapter('memory', process.execPath, [memoryServerPath], {
+      MEMORY_FILE_PATH: join(memoryDir, 'memory.jsonl'),
+    });
+    await adapter.connect();
+
+    await expect(adapter.listTools()).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'memory.create_entities', server: 'memory' }),
+      expect.objectContaining({ name: 'memory.search_nodes', server: 'memory' }),
+    ]));
+
+    const entity = {
+      name: 'Ananke',
+      entityType: 'governance-runtime',
+      observations: ['approval gateway'],
+    };
+    const createEntities = adapter.executorFor('memory.create_entities');
+    await expect(createEntities({ entities: [entity] })).resolves.toEqual([entity]);
+
+    const searchNodes = adapter.executorFor('memory.search_nodes');
+    await expect(searchNodes({ query: 'Ananke' })).resolves.toEqual({
+      entities: [entity],
+      relations: [],
+    });
+  }, MCP_SERVER_TIMEOUT_MS);
 });

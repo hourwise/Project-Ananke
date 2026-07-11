@@ -26,8 +26,11 @@ function currentCommitSha() {
   return process.env.GITHUB_SHA ?? safeExec('git', ['rev-parse', '--short=12', 'HEAD']);
 }
 
-function nodeMajor() {
-  return Number.parseInt(process.versions.node.split('.')[0] ?? '0', 10);
+function supportsRequiredNodeVersion() {
+  const [majorText, minorText] = process.versions.node.split('.');
+  const major = Number.parseInt(majorText ?? '0', 10);
+  const minor = Number.parseInt(minorText ?? '0', 10);
+  return major > 22 || (major === 22 && minor >= 12);
 }
 
 function checkPort(port) {
@@ -95,9 +98,9 @@ async function main() {
   checks.push(result(
     'ANANKE-ENV-NODE',
     'Node.js version',
-    nodeMajor() >= 22 ? 'passed' : 'failed',
+    supportsRequiredNodeVersion() ? 'passed' : 'failed',
     process.version,
-    'Install Node.js 22 or newer.',
+    'Install Node.js 22.12 or newer.',
   ));
 
   checks.push(result(

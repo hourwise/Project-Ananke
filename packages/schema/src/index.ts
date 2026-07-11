@@ -10,6 +10,10 @@ export const RiskClass = z.enum([
   'PAYMENT',
   'DEPLOYMENT',
   'PERMISSION_CHANGE',
+  'CREDENTIAL_ACCESS',
+  'NETWORK_EGRESS',
+  'SKILL_INSTALL',
+  'MODEL_PROVIDER_CHANGE',
   'UNKNOWN',
 ]);
 

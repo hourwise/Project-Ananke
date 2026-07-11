@@ -477,7 +477,7 @@ Ananke only
 Mnemosyne only
 Ananke + Mnemosyne together
 Ananke + Mnemosyne + shared runtime contracts
-Ananke + Mnemosyne + Moira Code shell
+Ananke + Mnemosyne + Moirae Code shell
 
 Combined tests should check:
 

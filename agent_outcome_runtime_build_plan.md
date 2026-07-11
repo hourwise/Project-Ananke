@@ -1,5 +1,7 @@
 # Agent Outcome Runtime — Build Plan and Future Roadmap
 
+**Supporting requirements baseline:** [Project Ananke Research and Requirements](docs/PROJECT_ANANKE_RESEARCH_AND_REQUIREMENTS.md).
+
 **Working name:** Project Ananke  
 **Alternative names:** Outcome Gateway, MCP Outcome Gateway, Agent Execution Runtime, Cognitive Runtime  
 **Document purpose:** Source-of-truth build plan for an open-source project that improves how AI agents use tools safely, clearly, and recoverably.  
