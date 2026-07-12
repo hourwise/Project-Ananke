@@ -1,7 +1,12 @@
 import { Hono } from 'hono';
 import type { Gateway } from './index.js';
 import { canonicalJson } from '@ananke/authority-engine';
-import { AuditEventType, type OperatorIdentity } from '@ananke/schema';
+import {
+  AuditEventType,
+  type ContentAccessRequest,
+  type ContentApprovalReceipt,
+  type OperatorIdentity,
+} from '@ananke/schema';
 import {
   hasOperatorPermission,
   permissionsForOperator,
@@ -57,6 +62,32 @@ function decisionMetadata(decision: 'approved' | 'rejected', operator: OperatorI
   };
 }
 
+function contentApprovalMetadata(
+  decision: 'approved' | 'rejected',
+  receipt: ContentApprovalReceipt,
+  operator: OperatorIdentity,
+): Record<string, unknown> {
+  return {
+    decision,
+    contentApprovalReceiptId: receipt.id,
+    operatorId: operator.operatorId,
+    operatorDisplayName: operator.displayName,
+    sessionId: operator.sessionId,
+    authMethod: operator.authMethod,
+    operatorRoles: operator.roles,
+    decidedAt: new Date().toISOString(),
+    toolName: receipt.toolName,
+    bindingHash: receipt.binding.bindingHash,
+    contentHash: receipt.binding.contentHash,
+    observationId: receipt.binding.observationId,
+    requestedExposure: receipt.binding.requestedExposure,
+    destination: receipt.binding.destination,
+    purpose: receipt.binding.purpose,
+    policyVersion: receipt.binding.policyVersion,
+    selection: receipt.binding.selection,
+  };
+}
+
 export function createGatewayRoutes(gateway: Gateway): Hono {
   const router = new Hono();
 
@@ -80,9 +111,13 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       toolName: string;
       arguments: Record<string, unknown>;
       approvalId?: string;
+      contentAccess?: ContentAccessRequest;
+      contentApprovalId?: string;
     }>();
     const result = await gateway.execute(body.toolName, body.arguments, {
       approvalId: body.approvalId,
+      contentAccess: body.contentAccess,
+      contentApprovalId: body.contentApprovalId,
     });
     return c.json(result);
   });
@@ -96,6 +131,23 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
     }
 
     return c.json({ ...operator, permissions: permissionsForOperator(operator) });
+  });
+
+  router.post('/auth/logout', async (c) => {
+    const operator = await requireOperator(gateway, c.req.header('authorization'));
+    if (!operator) {
+      return c.json({ error: 'Missing, invalid, expired, or revoked operator credential' }, 401);
+    }
+
+    const session = gateway.revokeOperatorSession(operator);
+    if (!session) {
+      return c.json({ error: 'Operator session is no longer active' }, 409);
+    }
+    return c.json({
+      sessionId: session.sessionId,
+      status: 'revoked',
+      revokedAt: session.revokedAt,
+    });
   });
 
   router.get('/approvals', async (c) => {
@@ -155,6 +207,59 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       decisionMetadata('rejected', operator),
     );
     return c.json(approvalResponse(gateway, grant));
+  });
+
+  router.get('/content-approvals', async (c) => {
+    const authorization = await authorizeOperator(
+      gateway,
+      c.req.header('authorization'),
+      'approvals:read',
+    );
+    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+
+    return c.json(gateway.pendingContentApprovals());
+  });
+
+  router.post('/content-approvals/:id/approve', async (c) => {
+    const authorization = await authorizeOperator(
+      gateway,
+      c.req.header('authorization'),
+      'approvals:decide',
+    );
+    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+
+    const receipt = gateway.approveContentApproval(c.req.param('id'), authorization.operator);
+    if (!receipt) {
+      return c.json({ error: 'Content approval not found or no longer approvable' }, 404);
+    }
+    gateway.audit.recordContentApprovalEvent(
+      'CONTENT_APPROVAL_GRANTED',
+      receipt.toolName,
+      receipt.binding.bindingHash,
+      contentApprovalMetadata('approved', receipt, authorization.operator),
+    );
+    return c.json(receipt);
+  });
+
+  router.post('/content-approvals/:id/reject', async (c) => {
+    const authorization = await authorizeOperator(
+      gateway,
+      c.req.header('authorization'),
+      'approvals:decide',
+    );
+    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+
+    const receipt = gateway.rejectContentApproval(c.req.param('id'), authorization.operator);
+    if (!receipt) {
+      return c.json({ error: 'Content approval not found or no longer rejectable' }, 404);
+    }
+    gateway.audit.recordContentApprovalEvent(
+      'CONTENT_APPROVAL_DENIED',
+      receipt.toolName,
+      receipt.binding.bindingHash,
+      contentApprovalMetadata('rejected', receipt, authorization.operator),
+    );
+    return c.json(receipt);
   });
 
   // ── Audit ────────────────────────────────────────────────

@@ -92,7 +92,7 @@ npm install
 npm run validate:env                 # preflight diagnostics, writes environment report
 npm run validate:quick               # build, tests, benchmark, filesystem demo, reports
 npm run build
-npm test                            # 75 tests
+npm test                            # 92 tests
 npm run test:bench                  # writes validation-reports/*.json and *.csv
 npm run demo:filesystem             # MCP demo, also writes validation-reports/*.json and *.csv
 npx tsx examples/mock-mcp-server/index.ts
@@ -174,17 +174,17 @@ Runtime Contracts should not contain engines, persistence, policies, databases, 
 
 ## Current Status
 
-Solid Phase 1 prototype. 75 tests pass across 8 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
+Solid Phase 1 prototype. 92 tests pass across 12 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
 
 | What works | What is next |
 |-----------|--------------|
-| Typed outcome schema (8 states, 13 codes) | Real MCP server validation beyond the demo |
+| Typed outcome schema (8 states, 28 codes, including content-preflight outcomes) | Real MCP server validation beyond the demo |
 | Hash-bound approval binding | Production auth/RBAC for dashboard |
 | Deterministic risk-class policy | MCP adapter validation |
 | SQLite + in-memory audit | Agent SDK for Claude/GPT/Gemini |
 | MCP stdio adapter | Production-grade MCP server matrix |
-| Filesystem MCP demo | Content preflight policy enforcement design |
-| OIDC JWT operator authentication and RBAC | IdP login/logout and durable session lifecycle |
+| Filesystem MCP demo and opt-in content-preflight enforcement with durable approval receipts | Source-aware scanners, receipt revocation, and downstream destination enforcement |
+| OIDC JWT operator authentication, RBAC, session revocation, and rotation tracking | IdP end-session/BFF integration and operator lifecycle controls |
 | Policy file loading | Policy expressiveness |
 
 [Full roadmap ->](docs/ROADMAP.md)
@@ -205,6 +205,7 @@ Solid Phase 1 prototype. 75 tests pass across 8 test files. All 7 must-pass safe
 | [Approval UI Security](docs/APPROVAL_UI_SECURITY.md) | Requirements for safe human approval |
 | [Operator Authentication and RBAC](docs/AUTHENTICATION_AND_RBAC.md) | OIDC JWT verification, roles, and endpoint permissions |
 | [Risk Classes](docs/RISK_CLASSES.md) | Risk levels, defaults, and v1 limitations |
+| [Content Preflight Contract](docs/CONTENT_PREFLIGHT_CONTRACT.md) | Phase 2 observation, exposure, decision, and approval-binding foundation |
 | [Policy Configuration](docs/POLICY_CONFIGURATION.md) | `ananke.policy.yaml` and JSON policy overrides |
 | [HTTP API](docs/HTTP_API.md) | Endpoint reference |
 | [Agent Integration](docs/AGENT_INTEGRATION.md) | Decision flow and TypeScript loop |

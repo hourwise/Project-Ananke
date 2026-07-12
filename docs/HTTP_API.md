@@ -9,11 +9,15 @@ Ananke exposes a REST API for tool execution, approvals, and audit queries.
 | `GET` | `/` | Health check - returns `{ name, version }` |
 | `GET` | `/api/tools` | List all registered tools with risk metadata |
 | `GET` | `/api/tools/:name` | Get a single tool's metadata |
-| `POST` | `/api/execute` | Execute a tool call - `{ toolName, arguments, approvalId? }` |
+| `POST` | `/api/execute` | Execute a tool call - `{ toolName, arguments, approvalId?, contentAccess?, contentApprovalId? }` |
 | `GET` | `/api/auth/me` | Verified operator identity, roles, and effective permissions |
+| `POST` | `/api/auth/logout` | Revoke the authenticated Ananke operator session |
 | `GET` | `/api/approvals` | List pending grants; requires `approvals:read` |
 | `POST` | `/api/approvals/:id/approve` | Approve a pending grant; requires `approvals:decide` |
 | `POST` | `/api/approvals/:id/reject` | Reject a pending grant; requires `approvals:decide` |
+| `GET` | `/api/content-approvals` | List pending content exposure receipts; requires `approvals:read` |
+| `POST` | `/api/content-approvals/:id/approve` | Approve a pending content receipt; requires `approvals:decide` |
+| `POST` | `/api/content-approvals/:id/reject` | Reject a pending content receipt; requires `approvals:decide` |
 | `GET` | `/api/audit` | Query audit log; requires `audit:read` - `?toolName=&eventType=&since=&limit=` |
 | `GET` | `/api/stats` | Runtime stats; requires `stats:read` |
 
@@ -32,6 +36,27 @@ The `/api/execute` endpoint returns an outcome envelope:
   }
 }
 ```
+
+## Content Preflight
+
+Content preflight is disabled by default. When the gateway enables it, every successful `READ_ONLY` result needs a registered adapter and a `contentAccess` request:
+
+```json
+{
+  "toolName": "notes.read",
+  "arguments": { "id": "note-1" },
+  "contentAccess": {
+    "requestedExposure": "SELECTED_CONTENT",
+    "destination": { "runtime": "ananke-agent", "agentId": "agent-1" },
+    "purpose": "Summarize this note",
+    "selection": { "fields": ["title", "summary"] }
+  }
+}
+```
+
+The gateway returns only the adapter-rendered surface matching the granted exposure in `outcome.data.content`. If preflight is unavailable, the scanner fails, the requested surface is unsupported, or policy blocks it, the outcome is `DENIED` and raw tool output is withheld. Preflight and decision evidence are recorded as `CONTENT_PREFLIGHTED` and `CONTENT_ACCESS_DECIDED` audit events.
+
+When policy requires elevated exposure, the gateway creates a pending content receipt and returns `WAITING_FOR_APPROVAL` with `outcome.data.contentApprovalReceiptId`. Approve or reject that receipt through the content-approval endpoints, then re-submit the same content access request with `contentApprovalId`. The receipt is one-time, hash-bound to the current observation and destination, and cannot authorize changed content.
 
 ## Audit Query
 
@@ -56,6 +81,20 @@ When approval is required, the response includes `approvalGrantId`:
 ```
 
 The retry succeeds only after that grant is approved through the approval API or approval engine.
+
+## Operator Logout
+
+`POST /api/auth/logout` requires a valid operator credential and revokes its Ananke session immediately:
+
+```json
+{
+  "sessionId": "oidc-session-id",
+  "status": "revoked",
+  "revokedAt": "2026-07-12T12:00:00.000Z"
+}
+```
+
+The same credential then receives `401` from operator endpoints, even if its JWT expiration time has not passed. This endpoint revokes the local Ananke session only; production callers must also use their identity provider end-session flow.
 
 ## Approval Response
 

@@ -5,6 +5,18 @@ import type { AuditEvent, AuditEventType, Outcome, PolicyDecision } from '@anank
  * satisfy this contract so the Gateway can accept either.
  */
 export interface IAuditLog {
+  recordContentApprovalEvent(
+    eventType: Extract<AuditEventType, 'CONTENT_APPROVAL_REQUESTED' | 'CONTENT_APPROVAL_GRANTED' | 'CONTENT_APPROVAL_DENIED' | 'CONTENT_APPROVAL_INVALIDATED'>,
+    toolName: string,
+    bindingHash: string,
+    metadata?: Record<string, unknown>,
+  ): AuditEvent;
+  recordContentPreflighted(toolName: string, metadata: Record<string, unknown>): AuditEvent;
+  recordContentAccessDecided(toolName: string, metadata: Record<string, unknown>): AuditEvent;
+  recordOperatorSessionEvent(
+    eventType: Extract<AuditEventType, 'OPERATOR_SESSION_STARTED' | 'OPERATOR_SESSION_ROTATED' | 'OPERATOR_SESSION_REVOKED'>,
+    metadata: Record<string, unknown>,
+  ): AuditEvent;
   recordToolCallRequested(toolName: string, args: Record<string, unknown>, serverName?: string): AuditEvent;
   recordPolicyChecked(toolName: string, decision: PolicyDecision): AuditEvent;
   recordApprovalRequested(toolName: string, approvalHash: string, args: Record<string, unknown>): AuditEvent;

@@ -1,6 +1,6 @@
 # ADR-XXXX: Content Preflight Policy Enforcement in Ananke
 
-- **Status:** Proposed
+- **Status:** Accepted for the Phase 2 policy foundation, opt-in read-result enforcement, and content approval receipts
 - **Date:** 2026-07-12
 - **Decision owners:** Project Ananke maintainers
 - **Applies to:** Project Ananke
@@ -14,9 +14,11 @@ Files and documents may contain prompt injection, secrets, scripts, macros, host
 
 ## Decision
 
-Ananke will accept a `ContentSurfaceObservation` and return a `ContentAccessDecision`.
+Ananke accepts a `ContentSurfaceObservation` and returns a `ContentAccessDecision` through the standalone `ContentPolicyEngine`.
 
 The scanner remains advisory. Ananke remains the authority boundary.
+
+The exact local contract, default decision table, binding fields, opt-in gateway boundary, and receipt lifecycle are documented in [Content Preflight Contract](CONTENT_PREFLIGHT_CONTRACT.md). These contracts are intended to migrate to Project Runtime Contracts after cross-runtime review.
 
 Available exposure levels:
 
@@ -70,7 +72,7 @@ Approvals must bind to:
 
 Any mutation invalidates approval.
 
-## Reason Codes
+## Content Decision Reason Codes
 
 Suggested additions:
 
@@ -88,7 +90,7 @@ Suggested additions:
 - `CONTENT_EXPOSURE_DOWNGRADED`
 - `CONTENT_QUARANTINED`
 
-Reason codes must not reveal detector lexicons, regexes, or private policy internals.
+These are `ContentAccessReasonCode` values. The gateway maps blocking content decisions into typed tool outcomes while preserving the policy evidence in audit metadata. Reason codes must not reveal detector lexicons, regexes, or private policy internals.
 
 ## Advisory and Blocking Modes
 
@@ -126,4 +128,4 @@ Audit records must include requested action, requested exposure, observation ID,
 - Approvals bind to content hash, exposure, destination, and purpose.
 - Changed content invalidates prior decisions.
 - Policies can downgrade, redact, select, approve, deny, or quarantine.
-- Tests cover clean content, hostile metadata, secrets, scan failure, stale receipts, and approval mutation.
+- Tests cover clean content, hostile metadata, secrets, scan failure, stale receipt binding, and approval mutation.

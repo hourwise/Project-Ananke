@@ -31,7 +31,7 @@ For the local development dashboard, approval queue and decision endpoints accep
 Authorization: Bearer dev-approval-token
 ```
 
-This token is for local development only. Production mode verifies signed OIDC JWTs and enforces the `viewer`, `approver`, `auditor`, and `admin` roles. Identity-provider login/logout integration, immediate revocation, durable session management, and operator lifecycle controls remain deployment work. See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md).
+This token is for local development only. Production mode verifies signed OIDC JWTs, enforces the `viewer`, `approver`, `auditor`, and `admin` roles, and can use durable SQLite session storage with immediate local revocation. Identity-provider login/logout integration and operator lifecycle controls remain deployment work. See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md).
 
 ## Minimum Security Requirements
 

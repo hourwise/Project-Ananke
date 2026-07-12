@@ -34,6 +34,24 @@ interface Approval {
   rejectedAt?: string;
 }
 
+interface ContentApproval {
+  id: string;
+  toolName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string;
+  expiresAt: string;
+  binding: {
+    bindingHash: string;
+    contentHash: string;
+    observationId: string;
+    requestedExposure: string;
+    destination: { runtime: string; agentId?: string };
+    purpose: string;
+    policyVersion: string;
+    selection?: Record<string, unknown>;
+  };
+}
+
 interface Operator {
   operatorId: string;
   displayName?: string;
@@ -56,6 +74,7 @@ function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [contentApprovals, setContentApprovals] = useState<ContentApproval[]>([]);
   const [tab, setTab] = useState<'audit' | 'approvals'>('audit');
   const [message, setMessage] = useState<string | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
@@ -68,6 +87,7 @@ function App() {
       setStats(null);
       setAudit([]);
       setApprovals([]);
+      setContentApprovals([]);
       setMessage('Authentication failed. Supply a valid development token or OIDC access token.');
       return;
     }
@@ -89,6 +109,14 @@ function App() {
     setStats(statsRes?.ok ? await statsRes.json() as Stats : null);
     setAudit(auditRes?.ok ? await auditRes.json() as AuditEvent[] : []);
     setApprovals(approvalsRes?.ok ? await approvalsRes.json() as Approval[] : []);
+    const contentApprovalsResponse = can('approvals:read')
+      ? await fetch(API + '/content-approvals', { headers: authHeaders(token) })
+      : undefined;
+    setContentApprovals(
+      contentApprovalsResponse?.ok
+        ? await contentApprovalsResponse.json() as ContentApproval[]
+        : [],
+    );
   }
 
   useEffect(() => {
@@ -101,6 +129,28 @@ function App() {
     sessionStorage.setItem('ananke.operatorToken', operatorToken);
     setMessage(null);
     void refresh(operatorToken);
+  }
+
+  async function logout(): Promise<void> {
+    const response = await fetch(`${API}/auth/logout`, {
+      method: 'POST',
+      headers: authHeaders(operatorToken),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      setMessage(`Logout failed: ${error.error ?? response.statusText}`);
+      return;
+    }
+
+    sessionStorage.removeItem('ananke.operatorToken');
+    setOperatorToken('');
+    setOperator(null);
+    setStats(null);
+    setAudit([]);
+    setApprovals([]);
+    setContentApprovals([]);
+    setMessage('Signed out. This gateway session has been revoked.');
   }
 
   async function decideApproval(id: string, decision: 'approve' | 'reject'): Promise<void> {
@@ -118,6 +168,23 @@ function App() {
     }
 
     setMessage(`Approval ${decision === 'approve' ? 'approved' : 'rejected'} by authenticated operator`);
+    await refresh();
+  }
+
+  async function decideContentApproval(id: string, decision: 'approve' | 'reject'): Promise<void> {
+    setMessage(null);
+    const response = await fetch(API + '/content-approvals/' + id + '/' + decision, {
+      method: 'POST',
+      headers: authHeaders(operatorToken),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      setMessage('Content approval ' + decision + ' failed: ' + (error.error ?? response.statusText));
+      return;
+    }
+
+    setMessage('Content exposure approved by authenticated operator');
     await refresh();
   }
 
@@ -157,6 +224,7 @@ function App() {
             />
           </label>
           <button style={tabBtn(true)} onClick={applyToken}>Authenticate</button>
+          {operator && <button style={tabBtn(false)} onClick={() => void logout()}>Sign out</button>}
         </div>
         {operator && (
           <div style={{ marginTop: 12, color: '#cbd5e1', fontSize: 13 }}>
@@ -201,7 +269,9 @@ function App() {
 
       {tab === 'approvals' && (
         <div>
-          {approvals.length === 0 && <p style={{ color: '#94a3b8' }}>No pending approvals.</p>}
+          {approvals.length === 0 && contentApprovals.length === 0 && (
+            <p style={{ color: '#94a3b8' }}>No pending approvals.</p>
+          )}
           {approvals.map((approval) => (
             <section key={approval.id} style={approvalCardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -250,6 +320,66 @@ function App() {
               </div>
             </section>
           ))}
+          {contentApprovals.length > 0 && (
+            <div style={{ marginTop: 30 }}>
+              <h2 style={{ color: '#f8fafc', marginBottom: 8 }}>Content exposure approvals</h2>
+              <p style={{ marginTop: 0, color: '#94a3b8' }}>
+                Approval releases the exact scanned content only to the bound destination and purpose.
+              </p>
+              {contentApprovals.map((approval) => (
+                <section key={approval.id} style={approvalCardStyle}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ color: '#c084fc', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>
+                        {approval.status} content exposure
+                      </div>
+                      <h2 style={{ margin: '4px 0', color: '#f8fafc' }}>{approval.toolName}</h2>
+                      <div style={{ color: '#cbd5e1' }}>
+                        Requested exposure: <strong>{approval.binding.requestedExposure}</strong>
+                      </div>
+                      <div style={{ color: '#94a3b8', fontSize: 13 }}>
+                        Expires: {new Date(approval.expiresAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <button
+                        style={approveBtn}
+                        disabled={!operator?.permissions.includes('approvals:decide')}
+                        onClick={() => void decideContentApproval(approval.id, 'approve')}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        style={rejectBtn}
+                        disabled={!operator?.permissions.includes('approvals:decide')}
+                        onClick={() => void decideContentApproval(approval.id, 'reject')}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={fieldGridStyle}>
+                    <PayloadBlock title="Destination" value={JSON.stringify(approval.binding.destination, null, 2)} />
+                    <PayloadBlock title="Purpose and selection" value={JSON.stringify({
+                      purpose: approval.binding.purpose,
+                      selection: approval.binding.selection,
+                      policyVersion: approval.binding.policyVersion,
+                    }, null, 2)} />
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <div style={labelStyle}>Content hash</div>
+                    <code style={hashStyle}>{approval.binding.contentHash}</code>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <div style={labelStyle}>Approval binding hash</div>
+                    <code style={hashStyle}>{approval.binding.bindingHash}</code>
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

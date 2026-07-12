@@ -32,8 +32,18 @@ export interface OperatorProfile {
   roles?: OperatorRoleType[];
 }
 
+/**
+ * Verified operator identity with non-enumerable credential metadata for the
+ * session lifecycle. The metadata is deliberately not included in API output.
+ */
+export interface AuthenticatedOperator extends OperatorIdentity {
+  credentialId?: string;
+  credentialIssuedAt?: string;
+  credentialExpiresAt?: string;
+}
+
 export interface OperatorAuthenticator {
-  authenticate(authorizationHeader?: string): Promise<OperatorIdentity | undefined>;
+  authenticate(authorizationHeader?: string): Promise<AuthenticatedOperator | undefined>;
 }
 
 export interface OidcAuthConfig {
@@ -57,10 +67,32 @@ function constantTimeEqual(left: string, right: string): boolean {
   return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
 }
 
+function timestampToIso(timestamp: number | undefined): string | undefined {
+  return timestamp === undefined ? undefined : new Date(timestamp * 1000).toISOString();
+}
+
+function withCredentialMetadata(
+  identity: OperatorIdentity,
+  credential?: {
+    id?: string;
+    issuedAt?: string;
+    expiresAt?: string;
+  },
+): AuthenticatedOperator {
+  if (credential?.id) {
+    Object.defineProperties(identity, {
+      credentialId: { value: credential.id, enumerable: false },
+      credentialIssuedAt: { value: credential.issuedAt, enumerable: false },
+      credentialExpiresAt: { value: credential.expiresAt, enumerable: false },
+    });
+  }
+  return identity as AuthenticatedOperator;
+}
+
 export class DevelopmentTokenAuthenticator implements OperatorAuthenticator {
   constructor(private readonly tokens: Readonly<Record<string, OperatorProfile>>) {}
 
-  async authenticate(authorizationHeader?: string): Promise<OperatorIdentity | undefined> {
+  async authenticate(authorizationHeader?: string): Promise<AuthenticatedOperator | undefined> {
     const token = bearerToken(authorizationHeader);
     if (!token) return undefined;
 
@@ -111,7 +143,7 @@ export class OidcJwtAuthenticator implements OperatorAuthenticator {
     }
   }
 
-  async authenticate(authorizationHeader?: string): Promise<OperatorIdentity | undefined> {
+  async authenticate(authorizationHeader?: string): Promise<AuthenticatedOperator | undefined> {
     const token = bearerToken(authorizationHeader);
     if (!token) return undefined;
 
@@ -127,7 +159,7 @@ export class OidcJwtAuthenticator implements OperatorAuthenticator {
       const sessionId = stringClaim(payload, this.config.sessionClaim ?? 'sid') ?? payload.jti;
       if (roles.length === 0 || !sessionId) return undefined;
 
-      return {
+      return withCredentialMetadata({
         operatorId: payload.sub,
         displayName: stringClaim(payload, 'name')
           ?? stringClaim(payload, 'preferred_username')
@@ -136,7 +168,11 @@ export class OidcJwtAuthenticator implements OperatorAuthenticator {
         authMethod: 'oidc-jwt',
         roles,
         authenticatedAt: new Date().toISOString(),
-      };
+      }, {
+        id: payload.jti,
+        issuedAt: timestampToIso(payload.iat),
+        expiresAt: timestampToIso(payload.exp),
+      });
     } catch {
       return undefined;
     }

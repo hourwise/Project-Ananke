@@ -59,6 +59,8 @@ Implemented in the repository:
 
 - development-token authentication;
 - OIDC JWT verification with issuer, audience, JWKS, role-claim, and session-claim support;
+- optional SQLite-backed operator sessions with immediate local revocation and JWT ID rotation checks;
+- session lifecycle audit events for start, rotation, and revocation;
 - deny-by-default RBAC for `viewer`, `approver`, `auditor`, and `admin`.
 
 Still assumed outside the repository:
@@ -66,7 +68,6 @@ Still assumed outside the repository:
 - IdP-specific login/logout integration;
 - secure browser session handling if cookies or a backend-for-frontend are added;
 - refresh-token protection outside browser JavaScript;
-- immediate revocation and durable session lifecycle controls;
 - operator provisioning and group-to-role review.
 
 ## Audit Protection

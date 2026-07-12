@@ -23,7 +23,7 @@ Override defaults per tool through policy configuration.
 
 In v1, risk class is assigned by tool identity, not argument content. For example, `filesystem.read_file` is `READ_ONLY` whether it reads `notes.txt` or `.env`. The `ALLOW` default means the action may execute; it does not automatically grant full exposure of whatever content comes back.
 
-This means Phase 1 can govern whether a tool is allowed to execute, but it does not yet inspect the sensitivity of all content flowing through otherwise read-only tools. Content preflight observations, exposure levels, and content-aware approvals are planned in [ADR-XXXX Content Preflight Policy Enforcement](ADR-XXXX-ananke-content-preflight-policy-enforcement.md).
+This means Phase 1 can govern whether a tool is allowed to execute, but it does not yet inspect the sensitivity of all content flowing through otherwise read-only tools. The Phase 2 content-preflight path is opt-in: enabled gateways require an adapter and content access request for successful read results, then release only the policy-granted surface. Durable content approvals and downstream destination enforcement are still pending. See [Content Preflight Contract](CONTENT_PREFLIGHT_CONTRACT.md).
 
 ## Operational Guidance
 

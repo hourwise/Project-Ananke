@@ -101,6 +101,76 @@ export function classifyOutcome(
       requiresUser: false,
       nextAction: 'Reload resource and retry.',
     },
+    CONTENT_PREFLIGHT_REQUIRED: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Configure content preflight before releasing this tool result.',
+    },
+    CONTENT_SCAN_FAILED: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Inspect the scanner failure and re-run preflight before releasing content.',
+    },
+    CONTENT_UNSUPPORTED: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Use a scanner that supports this content type before releasing content.',
+    },
+    CONTENT_RESOURCE_LIMIT: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Keep the content quarantined and inspect it in an isolated workflow.',
+    },
+    CONTENT_RISK_FLAGGED: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Review the content risk finding before requesting a narrower exposure.',
+    },
+    CONTENT_SECRET_EXPOSURE: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Do not release the detected secret; use derived metadata only.',
+    },
+    CONTENT_SCRIPT_PRESENT: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Do not release executable content without an isolated review workflow.',
+    },
+    CONTENT_TYPE_MISMATCH: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Verify the content type before requesting exposure.',
+    },
+    CONTENT_APPROVAL_REQUIRED: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Content approval is required before elevated exposure can be released.',
+    },
+    CONTENT_APPROVAL_REJECTED: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Content approval was rejected. Request a new scope only if it materially changes.',
+    },
+    CONTENT_APPROVAL_INVALIDATED: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Content changed after approval. Request a new content approval.',
+    },
+    CONTENT_RECEIPT_STALE: {
+      retryable: true,
+      requiresUser: false,
+      nextAction: 'Re-scan the source and request a fresh content decision.',
+    },
+    CONTENT_EXPOSURE_DOWNGRADED: {
+      retryable: false,
+      requiresUser: false,
+      nextAction: 'Continue only with the granted lower exposure level.',
+    },
+    CONTENT_QUARANTINED: {
+      retryable: false,
+      requiresUser: true,
+      nextAction: 'Keep the content quarantined and inspect it in an isolated workflow.',
+    },
     PARTIAL_SUCCESS: {
       retryable: true,
       requiresUser: true,

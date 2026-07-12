@@ -131,6 +131,30 @@ export class SqliteAuditLog implements IAuditLog {
     return full;
   }
 
+  recordContentApprovalEvent(
+    eventType: Extract<AuditEventType, 'CONTENT_APPROVAL_REQUESTED' | 'CONTENT_APPROVAL_GRANTED' | 'CONTENT_APPROVAL_DENIED' | 'CONTENT_APPROVAL_INVALIDATED'>,
+    toolName: string,
+    bindingHash: string,
+    metadata?: Record<string, unknown>,
+  ): AuditEvent {
+    return this.recordEvent({ eventType, toolName, approvalHash: bindingHash, metadata });
+  }
+
+  recordContentPreflighted(toolName: string, metadata: Record<string, unknown>): AuditEvent {
+    return this.recordEvent({ eventType: 'CONTENT_PREFLIGHTED', toolName, metadata });
+  }
+
+  recordContentAccessDecided(toolName: string, metadata: Record<string, unknown>): AuditEvent {
+    return this.recordEvent({ eventType: 'CONTENT_ACCESS_DECIDED', toolName, metadata });
+  }
+
+  recordOperatorSessionEvent(
+    eventType: Extract<AuditEventType, 'OPERATOR_SESSION_STARTED' | 'OPERATOR_SESSION_ROTATED' | 'OPERATOR_SESSION_REVOKED'>,
+    metadata: Record<string, unknown>,
+  ): AuditEvent {
+    return this.recordEvent({ eventType, toolName: 'operator.session', metadata });
+  }
+
   // ── Convenience recorders (mirrors in-memory AuditLog) ──────
 
   recordToolCallRequested(toolName: string, args: Record<string, unknown>, serverName?: string): AuditEvent {

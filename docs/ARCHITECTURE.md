@@ -12,7 +12,7 @@ Ananke is not an MCP gateway replacement. Gateways handle discovery, routing, id
 |--------|---------|---------|
 | **Runtime Core** | `@ananke/runtime-core` | Orchestrates all engines; HTTP server, tool registry, risk classifier |
 | **Authority Engine** | `@ananke/authority-engine` | Canonical hashing, approval binding, human approval gating |
-| **Policy Engine** | `@ananke/policy-engine` | Deterministic policy evaluation by risk class |
+| **Policy Engine** | `@ananke/policy-engine` | Deterministic action policy evaluation by risk class and the Phase 2 content-preflight policy foundation |
 | **Outcome Engine** | `@ananke/outcome-engine` | Converts raw results into structured, recoverable outcomes |
 | **Audit Engine** | `@ananke/audit-engine` | Pluggable audit logging - in-memory and SQLite backends |
 | **Tool Router** | `@ananke/tool-router` | Wraps tool execution, captures typed results and errors |

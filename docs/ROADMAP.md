@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** Solid Phase 1 prototype. 75 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
+**Status:** Solid Phase 1 prototype. 92 tests pass, all 7 must-pass safety scenarios are verified, and the filesystem MCP demo proves read/write approval over stdio. Not yet production-hardened.
 
 **Requirements baseline:** [Project Ananke Research and Requirements](PROJECT_ANANKE_RESEARCH_AND_REQUIREMENTS.md).
 
@@ -8,12 +8,12 @@
 
 | Area | State |
 |------|-------|
-| Outcome envelope | 7 typed states, 13 reason codes, recovery guidance on every failure |
+| Outcome envelope | 8 typed states, 28 reason codes, including opt-in content-preflight recovery guidance |
 | Approval binding | SHA-256 over deterministic canonical JSON, hash mismatch blocks execution |
 | Policy engine | Deterministic risk-class-based defaults, configurable per tool and policy file |
 | Audit log | In-memory and SQLite backends, pluggable via `IAuditLog` |
 | MCP adapter | Stdio client adapter with local filesystem and official Everything and Memory reference-server coverage |
-| Testbench | 7 must-pass scenarios across 5 domains, 75 tests |
+| Testbench | 7 must-pass scenarios across 5 domains, 92 tests |
 | CI | Build, unit tests, scenario benchmark, and filesystem MCP demo on push |
 
 ## In Progress
@@ -25,6 +25,7 @@
 | Ecosystem compatibility plan | Prepare Ananke + Mnemosyne + Runtime Contracts validation shape |
 | Environment check | Implemented locally and in CI; expand into guided remediation later |
 | Agent SDK | Client library wrapping the agent loop for Claude/GPT/Gemini |
+| Content preflight enforcement | Implemented opt-in for read results: adapters provide evidence and surfaces, the gateway releases only the granted surface, blocking outcomes withhold raw output, and one-time hash-bound approval receipts support elevated exposure. Source-aware scanners and destination enforcement are next |
 | CI hardening | Filesystem, Everything, and Memory MCP adapter tests run in CI; add further server families as needed |
 
 ## Next Milestone
@@ -35,7 +36,7 @@ Make Phase 1 serious, narrow, testable, and honest about its boundaries:
 2. Document no-bypass/chokepoint deployment requirements.
 3. Expand canonical hashing tests and document limitations.
 4. Harden approval dashboard authentication, session identity, and operator audit metadata.
-5. Only then start content preflight and information-flow enforcement design.
+5. Add source-aware scanner adapters, receipt revocation, and downstream destination enforcement.
 
 ## Phase 1: Side-Effect Governance
 
@@ -52,7 +53,7 @@ Phase 1 governs whether a tool call may execute and whether a side effect is aut
 | Filesystem MCP demo | Implemented |
 | Approval dashboard flow | Implemented: pending queue, approve/reject API, readable arguments, canonical payload, hash display |
 | Dashboard auth/RBAC | Implemented: OIDC JWT verification, development-token mode, deny-by-default roles, endpoint permissions, authenticated operator identity, spoofing tests, and audit metadata |
-| Session lifecycle hardening | Future: IdP login/logout integration, immediate revocation, durable sessions, rotation workflows, and operator lifecycle controls |
+| Session lifecycle hardening | Implemented: optional SQLite session store, immediate local logout revocation, JWT ID rotation checks, and lifecycle audit events. Future: IdP end-session/BFF integration and operator lifecycle controls |
 | Policy file loading | Implemented: auto-discovery for `ananke.policy.yaml`, `ananke.policy.yml`, and `ananke.policy.json` |
 | Expanded governance risk classes | Implemented: credential access, network egress, skill installation, and model-provider change require approval by default |
 | Audit query API | Implemented: authenticated HTTP query API with validated filters and bounded pagination |
