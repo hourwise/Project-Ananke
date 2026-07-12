@@ -14,7 +14,7 @@ MCP solved tool access. It did not solve governed execution.
 
 Today, agents often receive only `Success` or `Failure`. That is not enough when a tool can change files, send messages, deploy software, modify permissions, or expose sensitive information.
 
-Ananke wraps governed tool calls in structured outcome envelopes. Safe reads pass through immediately. Risky writes are gated behind hash-bound human approval. Every governed action is audited. Failures are recoverable, typed, and explicit.
+Ananke wraps governed tool calls in structured outcome envelopes. Read-only actions can be allowed quickly, but read-only classification does not automatically make returned content safe. Risky writes are gated behind hash-bound human approval. Every governed action is audited. Failures are recoverable, typed, and explicit.
 
 ```
 MCP-compatible tool access         Ananke governed execution
@@ -50,9 +50,18 @@ Operationally, this means production deployments must ensure:
 - Agents call Ananke, not tools directly.
 - Raw credentials are held by Ananke or a controlled execution environment, not by the agent.
 - MCP server stdio handles, API keys, database URLs, and shell access are not exposed through an alternate path.
+- If the same agent session can still reach a governed capability through an IDE extension, terminal, shell, local credential, or alternate network path, that path bypasses Ananke.
 - Governance claims apply only to calls routed through Ananke.
 
 This is a security boundary, not an implementation detail.
+
+## Content Exposure Boundary
+
+Ananke governs action execution first. Content exposure is a separate authority decision.
+
+A tool classified as `READ_ONLY` may still return unsafe content: secrets, prompt injection, macros, hostile metadata, or oversized payloads. A safe action does not imply safe content.
+
+The current Phase 1 runtime classifies actions by tool identity. The proposed next layer adds content preflight observations and policy decisions over exposure levels such as derived-only, selected content, and full content.
 
 ---
 
@@ -169,12 +178,12 @@ Solid Phase 1 prototype. 75 tests pass across 8 test files. All 7 must-pass safe
 
 | What works | What is next |
 |-----------|--------------|
-| Typed outcomes (7 states, 13 codes) | Real MCP server validation beyond the demo |
+| Typed outcome schema (8 states, 13 codes) | Real MCP server validation beyond the demo |
 | Hash-bound approval binding | Production auth/RBAC for dashboard |
 | Deterministic risk-class policy | MCP adapter validation |
 | SQLite + in-memory audit | Agent SDK for Claude/GPT/Gemini |
 | MCP stdio adapter | Production-grade MCP server matrix |
-| Filesystem MCP demo | Content-sensitive read governance design |
+| Filesystem MCP demo | Content preflight policy enforcement design |
 | OIDC JWT operator authentication and RBAC | IdP login/logout and durable session lifecycle |
 | Policy file loading | Policy expressiveness |
 
@@ -187,8 +196,10 @@ Solid Phase 1 prototype. 75 tests pass across 8 test files. All 7 must-pass safe
 | Document | Content |
 |----------|---------|
 | [Architecture](docs/ARCHITECTURE.md) | Engine overview and data flow |
+| [Threat Model](docs/threat-model.md) | Scope, trust boundaries, threats, mitigations, residual risks, and open questions |
 | [The Laws of Ananke](docs/THE_LAWS_OF_ANANKE.md) | Governance design principles |
 | [Security](SECURITY.md) | Phase 1 security boundary and deployment requirements |
+| [Deployment Assumptions](docs/security/deployment-assumptions.md) | What must be true in deployment for Ananke governance claims to hold |
 | [Outcome Envelope](docs/OUTCOME_ENVELOPE.md) | States, reason codes, recovery |
 | [Approval Binding](docs/APPROVAL_BINDING.md) | Canonical hashing and security |
 | [Approval UI Security](docs/APPROVAL_UI_SECURITY.md) | Requirements for safe human approval |
@@ -197,10 +208,14 @@ Solid Phase 1 prototype. 75 tests pass across 8 test files. All 7 must-pass safe
 | [Policy Configuration](docs/POLICY_CONFIGURATION.md) | `ananke.policy.yaml` and JSON policy overrides |
 | [HTTP API](docs/HTTP_API.md) | Endpoint reference |
 | [Agent Integration](docs/AGENT_INTEGRATION.md) | Decision flow and TypeScript loop |
+| [Gateway Contract](docs/integration/gateway-contract.md) | Formal execution lifecycle, approval checks, outcomes, and audit stages |
+| [Failure Recovery](docs/operations/failure-recovery.md) | What each outcome means, what to do next, and where current behaviour differs from public schema |
+| [Retry and Idempotency](docs/operations/retry-and-idempotency.md) | Current retry ownership, approval reuse rules, and unresolved duplicate-execution semantics |
 | [Deployment](docs/DEPLOYMENT.md) | Build, run, SQLite audit |
 | [Vision](docs/VISION.md) | Long-term direction |
 | [Project Research and Requirements](docs/PROJECT_ANANKE_RESEARCH_AND_REQUIREMENTS.md) | Scope, requirements, acceptance evidence, and deferred decisions |
 | [Roadmap](docs/ROADMAP.md) | What is solid, in progress, next |
+| [Decisions Index](docs/decisions/README.md) | Accepted and proposed ADRs in one place |
 | [Independent Architecture Review](docs/INDEPENDENT_ARCHITECTURE_REVIEW.md) | External design review input and resulting changes |
 | [ADR-0028 MCP Compatibility And Governance](docs/ADR-0028-MCP-COMPATIBILITY-AND-GOVERNANCE.md) | MCP connects tools; Ananke governs execution |
 | [ADR-0029 Chokepoint Enforcement](docs/ADR-0029-CHOKEPOINT-ENFORCEMENT.md) | No-bypass deployment requirement |
@@ -208,6 +223,7 @@ Solid Phase 1 prototype. 75 tests pass across 8 test files. All 7 must-pass safe
 | [ADR-0031 Approval UI Security](docs/ADR-0031-APPROVAL-UI-SECURITY.md) | Decision record for approval UI requirements |
 | [ADR-0032 Canonical Payload Hashing](docs/ADR-0032-CANONICAL-PAYLOAD-HASHING.md) | Decision record for hash-bound payload approval |
 | [ADR-0033 Frictionless Validation And Ecosystem Compatibility](docs/ADR-0033-FRICTIONLESS-VALIDATION-AND-ECOSYSTEM-COMPATIBILITY.md) | Decision record for validation reports and ecosystem compatibility |
+| [ADR-XXXX Content Preflight Policy Enforcement](docs/ADR-XXXX-ananke-content-preflight-policy-enforcement.md) | Decision record for content exposure policy and preflight observations |
 
 ---
 

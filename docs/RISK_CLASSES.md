@@ -21,9 +21,9 @@ Override defaults per tool through policy configuration.
 
 ## V1 Limitation
 
-In v1, risk class is assigned by tool identity, not argument content. For example, `filesystem.read_file` is `READ_ONLY` whether it reads `notes.txt` or `.env`. Content-sensitive reads, secret detection, data labels, and information-flow control are planned for a future governance layer.
+In v1, risk class is assigned by tool identity, not argument content. For example, `filesystem.read_file` is `READ_ONLY` whether it reads `notes.txt` or `.env`. The `ALLOW` default means the action may execute; it does not automatically grant full exposure of whatever content comes back.
 
-This means Phase 1 can govern whether a tool is allowed to execute, but it does not yet inspect the sensitivity of all content flowing through otherwise read-only tools.
+This means Phase 1 can govern whether a tool is allowed to execute, but it does not yet inspect the sensitivity of all content flowing through otherwise read-only tools. Content preflight observations, exposure levels, and content-aware approvals are planned in [ADR-XXXX Content Preflight Policy Enforcement](ADR-XXXX-ananke-content-preflight-policy-enforcement.md).
 
 ## Operational Guidance
 

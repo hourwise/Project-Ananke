@@ -12,9 +12,12 @@ Phase 1 classifies risk by tool identity. This is sufficient for deterministic w
 
 Information-flow control is out of scope for Phase 1, but it is a planned governance layer.
 
+The concrete policy direction is captured in [ADR-XXXX Content Preflight Policy Enforcement](ADR-XXXX-ananke-content-preflight-policy-enforcement.md): action classification remains advisory for content, and content exposure should be governed through preflight observations plus explicit exposure decisions.
+
 ## Future Requirements
 
 - Content-sensitive read classification
+- Content preflight observations and exposure levels
 - Secret and credential detection
 - Data labels and policy scopes
 - Tool result poisoning protection
@@ -24,4 +27,4 @@ Information-flow control is out of scope for Phase 1, but it is a planned govern
 ## Consequences
 
 - Phase 1 documentation must be explicit that `READ_ONLY` means read-only by tool identity, not always safe by content.
-- Production users should register broad read tools carefully and avoid exposing sensitive paths until content-sensitive governance exists.
+- Production users should register broad read tools carefully and avoid exposing sensitive paths until content preflight governance exists.

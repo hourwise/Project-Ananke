@@ -15,6 +15,8 @@ Ananke has deterministic default policy decisions by risk class:
 
 Policy files override those defaults per tool.
 
+These defaults govern action execution. A default `ALLOW` for `READ_ONLY` does not automatically imply full returned-content exposure; content-aware preflight policy is tracked separately as future governance work.
+
 ## File Names
 
 The gateway automatically loads the first policy file found in the current working directory:

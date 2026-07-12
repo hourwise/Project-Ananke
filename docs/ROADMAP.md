@@ -35,7 +35,7 @@ Make Phase 1 serious, narrow, testable, and honest about its boundaries:
 2. Document no-bypass/chokepoint deployment requirements.
 3. Expand canonical hashing tests and document limitations.
 4. Harden approval dashboard authentication, session identity, and operator audit metadata.
-5. Only then start information-flow control design.
+5. Only then start content preflight and information-flow enforcement design.
 
 ## Phase 1: Side-Effect Governance
 
@@ -130,10 +130,14 @@ Phase 2 governs what information may be read, shown, stored, or passed into anot
 
 | Area | Why it matters |
 |------|----------------|
+| Content preflight observations | A safe action does not imply safe content; policy needs deterministic evidence about what was scanned |
 | Content-sensitive read classification | `filesystem.read_file` may be safe for `notes.txt` and unsafe for `.env` |
+| Content exposure decisions | Policy should distinguish derived-only, sanitized metadata, selected content, and full content |
+| Approval binding for content | Human approval must bind to content hash, observation ID, exposure level, destination, and purpose |
 | Information-flow control | Prevent sensitive outputs from flowing into unsafe tools or prompts |
 | Tool description sanitisation | Tool metadata can carry prompt-injection content or misleading instructions |
 | Tool result poisoning protection | Tool outputs can manipulate downstream agent reasoning |
+| Secret and executable-content handling | Policies need first-class responses for secrets, scripts, macros, type mismatches, and scan failure |
 | Data labels and scopes | Policies need to distinguish public, private, secret, and regulated data |
 
 ## Phase 3: Multi-Agent Authority Chains
