@@ -1,15 +1,15 @@
 # Approval Binding
 
-> Approval is not approval of intent. Approval is approval of exact canonical call content.
+> Approval is not approval of intent. Approval is approval of one exact action by one authenticated human for one authenticated execution context.
 
 ## How It Works
 
-1. Agent proposes a tool call with arguments.
-2. If the tool requires approval, Ananke serializes the arguments into canonical JSON.
-3. Ananke hashes that canonical payload with SHA-256.
-4. Human approval is recorded against that hash.
+1. An authenticated agent proposes a server/tool call with arguments.
+2. If the tool requires approval, Ananke serializes the complete action into canonical JSON.
+3. Ananke hashes server identity, tool identity, canonical arguments, agent principal, tenant, resource scope, agent session, policy version, and expiry into `actionHash`.
+4. Authenticated human principal and session are added to `bindingHash` when approval is granted.
 5. The agent retries with the `approvalId`.
-6. Ananke re-hashes the proposed arguments and compares them with the approved hash.
+6. Ananke re-hashes the complete proposed action and verifies the human binding.
 7. If identical, the tool executes. If different, Ananke returns `APPROVAL_INVALIDATED`.
 
 ## Why Canonical Hashing
@@ -44,4 +44,4 @@ Future work should either adopt RFC 8785-compatible canonicalization or formally
 
 ## Security Property
 
-Changing a single byte of the approved arguments, including whitespace inside a string, invalidates approval. There is no way to slightly modify an approved call and keep the same approval binding.
+Changing any bound field invalidates approval. This includes a single byte of argument content (including whitespace inside a string), server or tool identity, either principal/session, tenant/resource scope, policy version, or expiry. Grants are bounded and one-time use.

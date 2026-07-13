@@ -1,5 +1,5 @@
-import type { ApprovalGrant, OperatorIdentity } from '@ananke/schema';
-import { hashCanonicalCall } from './canonical-hash.js';
+import type { ApprovalGrant, ExecutionContext, OperatorIdentity } from '@ananke/schema';
+import { hashApprovalAction, hashApprovalBinding, type ApprovalAction } from './canonical-hash.js';
 
 /**
  * In-memory approval store. Replace with SQLite-backed store in the gateway package.
@@ -7,21 +7,31 @@ import { hashCanonicalCall } from './canonical-hash.js';
 const grants = new Map<string, ApprovalGrant>();
 
 function isExpired(grant: ApprovalGrant): boolean {
-  return Boolean(grant.expiresAt && new Date(grant.expiresAt) < new Date());
+  return new Date(grant.expiresAt) <= new Date();
 }
 
 export function storeApproval(
   id: string,
+  serverName: string,
   toolName: string,
   args: Record<string, unknown>,
-  expiresAt?: string,
+  executionContext: ExecutionContext,
+  expiresAt: string,
 ): ApprovalGrant {
-  const canonicalHash = hashCanonicalCall(args);
+  const actionHash = hashApprovalAction({
+    serverName,
+    toolName,
+    arguments: args,
+    executionContext,
+    expiresAt,
+  });
   const grant: ApprovalGrant = {
     id,
+    serverName,
     toolName,
-    canonicalHash,
+    actionHash,
     arguments: args,
+    executionContext,
     status: 'pending',
     requestedAt: new Date().toISOString(),
     expiresAt,
@@ -37,7 +47,7 @@ export function getApproval(id: string): ApprovalGrant | undefined {
 
 export function validateApproval(
   id: string,
-  proposedArgs: Record<string, unknown>,
+  proposedAction: Omit<ApprovalAction, 'expiresAt'>,
 ): { valid: boolean; grant?: ApprovalGrant; reason?: string } {
   const grant = grants.get(id);
   if (!grant) {
@@ -55,8 +65,20 @@ export function validateApproval(
   if (grant.status === 'rejected') {
     return { valid: false, grant, reason: 'Approval rejected' };
   }
-  const proposedHash = hashCanonicalCall(proposedArgs);
-  if (grant.canonicalHash !== proposedHash) {
+  const proposedHash = hashApprovalAction({ ...proposedAction, expiresAt: grant.expiresAt });
+  if (grant.actionHash !== proposedHash) {
+    return { valid: false, grant, reason: 'APPROVAL_HASH_MISMATCH' };
+  }
+  if (
+    !grant.approvedBy ||
+    !grant.approvedBySessionId ||
+    !grant.bindingHash ||
+    grant.bindingHash !==
+      hashApprovalBinding(grant.actionHash, {
+        operatorId: grant.approvedBy,
+        sessionId: grant.approvedBySessionId,
+      })
+  ) {
     return { valid: false, grant, reason: 'APPROVAL_HASH_MISMATCH' };
   }
   return { valid: true, grant };
@@ -72,6 +94,7 @@ export function approveApproval(id: string, operator: OperatorIdentity): Approva
   grant.approvedBy = operator.operatorId;
   grant.approvedBySessionId = operator.sessionId;
   grant.approvedAt = new Date().toISOString();
+  grant.bindingHash = hashApprovalBinding(grant.actionHash, operator);
   return grant;
 }
 

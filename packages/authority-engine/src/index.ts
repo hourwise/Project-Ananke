@@ -1,4 +1,11 @@
-export { canonicalJson, hashCanonicalCall, verifyApprovalBinding } from './canonical-hash.js';
+export {
+  canonicalJson,
+  hashCanonicalCall,
+  hashApprovalAction,
+  hashApprovalBinding,
+  verifyApprovalBinding,
+  type ApprovalAction,
+} from './canonical-hash.js';
 export {
   storeApproval,
   getApproval,

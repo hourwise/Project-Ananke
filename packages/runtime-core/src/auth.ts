@@ -8,15 +8,13 @@ import {
 } from 'jose';
 import {
   OperatorRole,
+  type ExecutionIdentity,
   type OperatorIdentity,
   type OperatorRole as OperatorRoleType,
 } from '@ananke/schema';
 
 export type OperatorPermission =
-  | 'approvals:read'
-  | 'approvals:decide'
-  | 'audit:read'
-  | 'stats:read';
+  'approvals:read' | 'approvals:decide' | 'audit:read' | 'stats:read';
 
 const ROLE_PERMISSIONS: Record<OperatorRoleType, ReadonlySet<OperatorPermission>> = {
   viewer: new Set(['stats:read']),
@@ -44,6 +42,17 @@ export interface AuthenticatedOperator extends OperatorIdentity {
 
 export interface OperatorAuthenticator {
   authenticate(authorizationHeader?: string): Promise<AuthenticatedOperator | undefined>;
+}
+
+export interface ExecutionProfile {
+  agentPrincipalId: string;
+  tenantId: string;
+  resourceScope: string;
+  sessionId?: string;
+}
+
+export interface ExecutionAuthenticator {
+  authenticate(authorizationHeader?: string): Promise<ExecutionIdentity | undefined>;
 }
 
 export interface OidcAuthConfig {
@@ -96,11 +105,15 @@ export class DevelopmentTokenAuthenticator implements OperatorAuthenticator {
     const token = bearerToken(authorizationHeader);
     if (!token) return undefined;
 
-    const entry = Object.entries(this.tokens).find(([candidate]) => constantTimeEqual(candidate, token));
+    const entry = Object.entries(this.tokens).find(([candidate]) =>
+      constantTimeEqual(candidate, token),
+    );
     if (!entry) return undefined;
 
     const profile = entry[1];
-    const roles = (profile.roles ?? ['admin']).filter((role) => OperatorRole.safeParse(role).success);
+    const roles = (profile.roles ?? ['admin']).filter(
+      (role) => OperatorRole.safeParse(role).success,
+    );
     if (roles.length === 0) return undefined;
 
     return {
@@ -114,6 +127,42 @@ export class DevelopmentTokenAuthenticator implements OperatorAuthenticator {
   }
 }
 
+export class DevelopmentExecutionTokenAuthenticator implements ExecutionAuthenticator {
+  constructor(private readonly tokens: Readonly<Record<string, ExecutionProfile>>) {}
+
+  async authenticate(authorizationHeader?: string): Promise<ExecutionIdentity | undefined> {
+    const token = bearerToken(authorizationHeader);
+    if (!token) return undefined;
+
+    const entry = Object.entries(this.tokens).find(([candidate]) =>
+      constantTimeEqual(candidate, token),
+    );
+    if (!entry) return undefined;
+
+    const profile = entry[1];
+    return {
+      agentPrincipalId: profile.agentPrincipalId,
+      tenantId: profile.tenantId,
+      resourceScope: profile.resourceScope,
+      sessionId: profile.sessionId ?? crypto.randomUUID(),
+      authMethod: 'dev-token',
+      authenticatedAt: new Date().toISOString(),
+    };
+  }
+}
+
+export class DenyAllOperatorAuthenticator implements OperatorAuthenticator {
+  async authenticate(): Promise<undefined> {
+    return undefined;
+  }
+}
+
+export class DenyAllExecutionAuthenticator implements ExecutionAuthenticator {
+  async authenticate(): Promise<undefined> {
+    return undefined;
+  }
+}
+
 function stringClaim(payload: JWTPayload, name: string): string | undefined {
   const value = payload[name];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -121,17 +170,24 @@ function stringClaim(payload: JWTPayload, name: string): string | undefined {
 
 function roleClaims(payload: JWTPayload, claimName: string): OperatorRoleType[] {
   const value = payload[claimName];
-  const claims = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[\s,]+/) : [];
-  return [...new Set(claims.flatMap((claim) => {
-    const parsed = OperatorRole.safeParse(claim);
-    return parsed.success ? [parsed.data] : [];
-  }))];
+  const claims = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[\s,]+/)
+      : [];
+  return [
+    ...new Set(
+      claims.flatMap((claim) => {
+        const parsed = OperatorRole.safeParse(claim);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  ];
 }
 
 export class OidcJwtAuthenticator implements OperatorAuthenticator {
   private readonly jwks:
-    | ReturnType<typeof createRemoteJWKSet>
-    | ReturnType<typeof createLocalJWKSet>;
+    ReturnType<typeof createRemoteJWKSet> | ReturnType<typeof createLocalJWKSet>;
 
   constructor(private readonly config: OidcAuthConfig) {
     if (config.jwks) {
@@ -159,20 +215,24 @@ export class OidcJwtAuthenticator implements OperatorAuthenticator {
       const sessionId = stringClaim(payload, this.config.sessionClaim ?? 'sid') ?? payload.jti;
       if (roles.length === 0 || !sessionId) return undefined;
 
-      return withCredentialMetadata({
-        operatorId: payload.sub,
-        displayName: stringClaim(payload, 'name')
-          ?? stringClaim(payload, 'preferred_username')
-          ?? stringClaim(payload, 'email'),
-        sessionId,
-        authMethod: 'oidc-jwt',
-        roles,
-        authenticatedAt: new Date().toISOString(),
-      }, {
-        id: payload.jti,
-        issuedAt: timestampToIso(payload.iat),
-        expiresAt: timestampToIso(payload.exp),
-      });
+      return withCredentialMetadata(
+        {
+          operatorId: payload.sub,
+          displayName:
+            stringClaim(payload, 'name') ??
+            stringClaim(payload, 'preferred_username') ??
+            stringClaim(payload, 'email'),
+          sessionId,
+          authMethod: 'oidc-jwt',
+          roles,
+          authenticatedAt: new Date().toISOString(),
+        },
+        {
+          id: payload.jti,
+          issuedAt: timestampToIso(payload.iat),
+          expiresAt: timestampToIso(payload.exp),
+        },
+      );
     } catch {
       return undefined;
     }

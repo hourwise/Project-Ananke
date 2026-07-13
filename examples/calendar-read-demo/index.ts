@@ -9,7 +9,14 @@
 import { Gateway } from '../../packages/gateway/src/index.js';
 
 async function main() {
-  const gateway = new Gateway();
+  const gateway = new Gateway({
+    embeddedExecutionContext: {
+      agentPrincipalId: 'calendar-demo',
+      tenantId: 'local-demo',
+      resourceScope: 'calendar:*',
+      sessionId: 'calendar-demo-session',
+    },
+  });
 
   gateway.registerTool({
     name: 'calendar.list_events',

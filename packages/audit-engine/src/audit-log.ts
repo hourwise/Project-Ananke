@@ -1,5 +1,6 @@
 import type { AuditEvent, AuditEventType, Outcome, PolicyDecision } from '@ananke/schema';
 import type { IAuditLog } from './audit-log-interface.js';
+import { sanitizeAuditEvent } from './audit-sanitizer.js';
 
 /**
  * In-memory Audit Log — records every decision and side effect.
@@ -9,17 +10,23 @@ export class AuditLog implements IAuditLog {
   private events: AuditEvent[] = [];
 
   record(event: Omit<AuditEvent, 'id' | 'timestamp'>): AuditEvent {
-    const full: AuditEvent = {
+    const full = sanitizeAuditEvent({
       ...event,
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
-    };
+    });
     this.events.push(full);
     return full;
   }
 
   recordContentApprovalEvent(
-    eventType: Extract<AuditEventType, 'CONTENT_APPROVAL_REQUESTED' | 'CONTENT_APPROVAL_GRANTED' | 'CONTENT_APPROVAL_DENIED' | 'CONTENT_APPROVAL_INVALIDATED'>,
+    eventType: Extract<
+      AuditEventType,
+      | 'CONTENT_APPROVAL_REQUESTED'
+      | 'CONTENT_APPROVAL_GRANTED'
+      | 'CONTENT_APPROVAL_DENIED'
+      | 'CONTENT_APPROVAL_INVALIDATED'
+    >,
     toolName: string,
     bindingHash: string,
     metadata?: Record<string, unknown>,
@@ -36,13 +43,20 @@ export class AuditLog implements IAuditLog {
   }
 
   recordOperatorSessionEvent(
-    eventType: Extract<AuditEventType, 'OPERATOR_SESSION_STARTED' | 'OPERATOR_SESSION_ROTATED' | 'OPERATOR_SESSION_REVOKED'>,
+    eventType: Extract<
+      AuditEventType,
+      'OPERATOR_SESSION_STARTED' | 'OPERATOR_SESSION_ROTATED' | 'OPERATOR_SESSION_REVOKED'
+    >,
     metadata: Record<string, unknown>,
   ): AuditEvent {
     return this.record({ eventType, toolName: 'operator.session', metadata });
   }
 
-  recordToolCallRequested(toolName: string, args: Record<string, unknown>, serverName?: string): AuditEvent {
+  recordToolCallRequested(
+    toolName: string,
+    args: Record<string, unknown>,
+    serverName?: string,
+  ): AuditEvent {
     return this.record({
       eventType: 'TOOL_CALL_REQUESTED',
       toolName,
@@ -59,7 +73,11 @@ export class AuditLog implements IAuditLog {
     });
   }
 
-  recordApprovalRequested(toolName: string, approvalHash: string, args: Record<string, unknown>): AuditEvent {
+  recordApprovalRequested(
+    toolName: string,
+    approvalHash: string,
+    args: Record<string, unknown>,
+  ): AuditEvent {
     return this.record({
       eventType: 'APPROVAL_REQUESTED',
       toolName,

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import type { AuditEvent, AuditEventType, Outcome, PolicyDecision } from '@ananke/schema';
 import type { Statement } from 'better-sqlite3';
 import type { IAuditLog } from './audit-log-interface.js';
+import { sanitizeAuditEvent } from './audit-sanitizer.js';
 
 /**
  * Persistent SQLite audit log — survives restarts and crashes.
@@ -106,11 +107,11 @@ export class SqliteAuditLog implements IAuditLog {
   private recordEvent(event: Omit<AuditEvent, 'id' | 'timestamp'>): AuditEvent {
     if (this.closed) throw new Error('SqliteAuditLog is closed');
 
-    const full: AuditEvent = {
+    const full = sanitizeAuditEvent({
       ...event,
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
-    };
+    });
 
     this.insertStmt.run({
       id: full.id,
@@ -132,7 +133,13 @@ export class SqliteAuditLog implements IAuditLog {
   }
 
   recordContentApprovalEvent(
-    eventType: Extract<AuditEventType, 'CONTENT_APPROVAL_REQUESTED' | 'CONTENT_APPROVAL_GRANTED' | 'CONTENT_APPROVAL_DENIED' | 'CONTENT_APPROVAL_INVALIDATED'>,
+    eventType: Extract<
+      AuditEventType,
+      | 'CONTENT_APPROVAL_REQUESTED'
+      | 'CONTENT_APPROVAL_GRANTED'
+      | 'CONTENT_APPROVAL_DENIED'
+      | 'CONTENT_APPROVAL_INVALIDATED'
+    >,
     toolName: string,
     bindingHash: string,
     metadata?: Record<string, unknown>,
@@ -149,7 +156,10 @@ export class SqliteAuditLog implements IAuditLog {
   }
 
   recordOperatorSessionEvent(
-    eventType: Extract<AuditEventType, 'OPERATOR_SESSION_STARTED' | 'OPERATOR_SESSION_ROTATED' | 'OPERATOR_SESSION_REVOKED'>,
+    eventType: Extract<
+      AuditEventType,
+      'OPERATOR_SESSION_STARTED' | 'OPERATOR_SESSION_ROTATED' | 'OPERATOR_SESSION_REVOKED'
+    >,
     metadata: Record<string, unknown>,
   ): AuditEvent {
     return this.recordEvent({ eventType, toolName: 'operator.session', metadata });
@@ -157,16 +167,34 @@ export class SqliteAuditLog implements IAuditLog {
 
   // ── Convenience recorders (mirrors in-memory AuditLog) ──────
 
-  recordToolCallRequested(toolName: string, args: Record<string, unknown>, serverName?: string): AuditEvent {
-    return this.recordEvent({ eventType: 'TOOL_CALL_REQUESTED', toolName, serverName, arguments: args });
+  recordToolCallRequested(
+    toolName: string,
+    args: Record<string, unknown>,
+    serverName?: string,
+  ): AuditEvent {
+    return this.recordEvent({
+      eventType: 'TOOL_CALL_REQUESTED',
+      toolName,
+      serverName,
+      arguments: args,
+    });
   }
 
   recordPolicyChecked(toolName: string, decision: PolicyDecision): AuditEvent {
     return this.recordEvent({ eventType: 'POLICY_CHECKED', toolName, policyDecision: decision });
   }
 
-  recordApprovalRequested(toolName: string, approvalHash: string, args: Record<string, unknown>): AuditEvent {
-    return this.recordEvent({ eventType: 'APPROVAL_REQUESTED', toolName, approvalHash, arguments: args });
+  recordApprovalRequested(
+    toolName: string,
+    approvalHash: string,
+    args: Record<string, unknown>,
+  ): AuditEvent {
+    return this.recordEvent({
+      eventType: 'APPROVAL_REQUESTED',
+      toolName,
+      approvalHash,
+      arguments: args,
+    });
   }
 
   recordApprovalGranted(
@@ -235,7 +263,9 @@ export class SqliteAuditLog implements IAuditLog {
   }
 
   all(): AuditEvent[] {
-    const rows = this.db.prepare('SELECT * FROM audit_events ORDER BY timestamp ASC').all() as AuditRow[];
+    const rows = this.db
+      .prepare('SELECT * FROM audit_events ORDER BY timestamp ASC')
+      .all() as AuditRow[];
     return rows.map(rowToEvent);
   }
 
@@ -245,7 +275,9 @@ export class SqliteAuditLog implements IAuditLog {
 
   /** Total number of audit events in the database. */
   count(): number {
-    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM audit_events').get() as { cnt: number };
+    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM audit_events').get() as {
+      cnt: number;
+    };
     return row.cnt;
   }
 

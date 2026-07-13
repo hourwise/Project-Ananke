@@ -7,16 +7,15 @@ import {
   type ContentApprovalReceipt,
   type OperatorIdentity,
 } from '@ananke/schema';
-import {
-  hasOperatorPermission,
-  permissionsForOperator,
-  type OperatorPermission,
-} from './auth.js';
+import { hasOperatorPermission, permissionsForOperator, type OperatorPermission } from './auth.js';
 
 const DEFAULT_AUDIT_QUERY_LIMIT = 100;
 const MAX_AUDIT_QUERY_LIMIT = 500;
 
-function approvalResponse(gateway: Gateway, approval: NonNullable<ReturnType<Gateway['approvals']['get']>>) {
+function approvalResponse(
+  gateway: Gateway,
+  approval: NonNullable<ReturnType<Gateway['approvals']['get']>>,
+) {
   const tool = gateway.registry.get(approval.toolName);
   return {
     ...approval,
@@ -36,10 +35,7 @@ async function authorizeOperator(
   gateway: Gateway,
   authorizationHeader: string | undefined,
   permission: OperatorPermission,
-): Promise<
-  | { operator: OperatorIdentity }
-  | { status: 401 | 403; error: string }
-> {
+): Promise<{ operator: OperatorIdentity } | { status: 401 | 403; error: string }> {
   const operator = await requireOperator(gateway, authorizationHeader);
   if (!operator) {
     return { status: 401, error: 'Missing, invalid, or expired operator credential' };
@@ -50,7 +46,10 @@ async function authorizeOperator(
   return { operator };
 }
 
-function decisionMetadata(decision: 'approved' | 'rejected', operator: OperatorIdentity): Record<string, unknown> {
+function decisionMetadata(
+  decision: 'approved' | 'rejected',
+  operator: OperatorIdentity,
+): Record<string, unknown> {
   return {
     decision,
     operatorId: operator.operatorId,
@@ -107,6 +106,10 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
   // ── Execute ──────────────────────────────────────────────
 
   router.post('/execute', async (c) => {
+    const identity = await gateway.authenticateExecution(c.req.header('authorization'));
+    if (!identity) {
+      return c.json({ error: 'Missing, invalid, or expired execution credential' }, 401);
+    }
     const body = await c.req.json<{
       toolName: string;
       arguments: Record<string, unknown>;
@@ -118,6 +121,7 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       approvalId: body.approvalId,
       contentAccess: body.contentAccess,
       contentApprovalId: body.contentApprovalId,
+      executionContext: gateway.executionContextFor(identity),
     });
     return c.json(result);
   });
@@ -156,9 +160,12 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       c.req.header('authorization'),
       'approvals:read',
     );
-    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    if (!('operator' in authorization))
+      return c.json({ error: authorization.error }, authorization.status);
 
-    return c.json(gateway.approvals.pending().map((approval) => approvalResponse(gateway, approval)));
+    return c.json(
+      gateway.approvals.pending().map((approval) => approvalResponse(gateway, approval)),
+    );
   });
 
   router.post('/approvals/:id/approve', async (c) => {
@@ -168,7 +175,8 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       c.req.header('authorization'),
       'approvals:decide',
     );
-    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    if (!('operator' in authorization))
+      return c.json({ error: authorization.error }, authorization.status);
     const { operator } = authorization;
 
     const grant = gateway.approvals.approve(id, operator);
@@ -179,7 +187,7 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
 
     gateway.audit.recordApprovalGranted(
       grant.toolName,
-      grant.canonicalHash,
+      grant.bindingHash ?? grant.actionHash,
       decisionMetadata('approved', operator),
     );
     return c.json(approvalResponse(gateway, grant));
@@ -192,7 +200,8 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       c.req.header('authorization'),
       'approvals:decide',
     );
-    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    if (!('operator' in authorization))
+      return c.json({ error: authorization.error }, authorization.status);
     const { operator } = authorization;
 
     const grant = gateway.approvals.reject(id, operator);
@@ -203,7 +212,7 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
 
     gateway.audit.recordApprovalDenied(
       grant.toolName,
-      grant.canonicalHash,
+      grant.actionHash,
       decisionMetadata('rejected', operator),
     );
     return c.json(approvalResponse(gateway, grant));
@@ -215,7 +224,8 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       c.req.header('authorization'),
       'approvals:read',
     );
-    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    if (!('operator' in authorization))
+      return c.json({ error: authorization.error }, authorization.status);
 
     return c.json(gateway.pendingContentApprovals());
   });
@@ -226,7 +236,8 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       c.req.header('authorization'),
       'approvals:decide',
     );
-    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    if (!('operator' in authorization))
+      return c.json({ error: authorization.error }, authorization.status);
 
     const receipt = gateway.approveContentApproval(c.req.param('id'), authorization.operator);
     if (!receipt) {
@@ -247,7 +258,8 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       c.req.header('authorization'),
       'approvals:decide',
     );
-    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    if (!('operator' in authorization))
+      return c.json({ error: authorization.error }, authorization.status);
 
     const receipt = gateway.rejectContentApproval(c.req.param('id'), authorization.operator);
     if (!receipt) {
@@ -270,7 +282,8 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       c.req.header('authorization'),
       'audit:read',
     );
-    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    if (!('operator' in authorization))
+      return c.json({ error: authorization.error }, authorization.status);
 
     const toolName = c.req.query('toolName');
     const requestedEventType = c.req.query('eventType');
@@ -307,12 +320,15 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       c.req.header('authorization'),
       'stats:read',
     );
-    if (!('operator' in authorization)) return c.json({ error: authorization.error }, authorization.status);
+    if (!('operator' in authorization))
+      return c.json({ error: authorization.error }, authorization.status);
 
     const events = gateway.audit.all();
     const executed = events.filter((e) => e.eventType === 'TOOL_EXECUTED').length;
     const failed = events.filter((e) => e.eventType === 'TOOL_FAILED').length;
-    const denied = events.filter((e) => e.eventType === 'POLICY_CHECKED' && e.policyDecision === 'DENY').length;
+    const denied = events.filter(
+      (e) => e.eventType === 'POLICY_CHECKED' && e.policyDecision === 'DENY',
+    ).length;
     const pendingApprovals = gateway.approvals.pending().length;
     return c.json({ executed, failed, denied, pendingApprovals, totalEvents: events.length });
   });

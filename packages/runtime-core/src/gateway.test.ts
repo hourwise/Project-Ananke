@@ -14,13 +14,24 @@ const TEST_OPERATOR = {
   authenticatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+const TEST_EXECUTION_CONTEXT = {
+  agentPrincipalId: 'test-agent',
+  tenantId: 'test-tenant',
+  resourceScope: 'test:*',
+  sessionId: 'test-agent-session',
+  policyVersion: 'builtin:0.1.0',
+};
+
 const APPROVAL_AUTH_HEADERS = {
   authorization: 'Bearer dev-approval-token',
   'content-type': 'application/json',
 };
 
 function createGateway(): Gateway {
-  const gw = new Gateway();
+  const gw = new Gateway({
+    developmentMode: true,
+    embeddedExecutionContext: TEST_EXECUTION_CONTEXT,
+  });
   gw.approvals.clear();
 
   gw.registerTool({
@@ -157,9 +168,94 @@ describe('Gateway â€” Approval Binding (Tests 3 & 4)', () => {
     gw.approvals.approve(r1.approvalGrantId!, TEST_OPERATOR);
 
     // Try with modified args
-    const r2 = await gw.execute('gmail.send_email', modifiedArgs, { approvalId: r1.approvalGrantId });
+    const r2 = await gw.execute('gmail.send_email', modifiedArgs, {
+      approvalId: r1.approvalGrantId,
+    });
     expect(r2.outcome.state).toBe('APPROVAL_INVALIDATED');
     expect(r2.outcome.reasonCode).toBe('APPROVAL_HASH_MISMATCH');
+  });
+
+  it('blocks approval reuse across tools even when arguments are identical', async () => {
+    gw.registerTool({
+      name: 'gmail.forward_email',
+      server: 'test',
+      riskClass: 'EXTERNAL_SEND',
+      requiredPermissions: [],
+      retryable: false,
+      requiresApproval: true,
+    });
+    gw.setExecutor('gmail.forward_email', async () => ({ forwarded: true }));
+    const args = { to: 'bob@example.com', subject: 'Update', body: 'Approved body.' };
+    const requested = await gw.execute('gmail.send_email', args);
+    gw.approvals.approve(requested.approvalGrantId!, TEST_OPERATOR);
+
+    const reused = await gw.execute('gmail.forward_email', args, {
+      approvalId: requested.approvalGrantId,
+    });
+    expect(reused.outcome.state).toBe('APPROVAL_INVALIDATED');
+    expect(reused.outcome.reasonCode).toBe('APPROVAL_HASH_MISMATCH');
+  });
+
+  it('blocks approval reuse across execution principals', async () => {
+    const args = { to: 'bob@example.com', subject: 'Update', body: 'Approved body.' };
+    const requested = await gw.execute('gmail.send_email', args);
+    gw.approvals.approve(requested.approvalGrantId!, TEST_OPERATOR);
+
+    const reused = await gw.execute('gmail.send_email', args, {
+      approvalId: requested.approvalGrantId,
+      executionContext: { ...TEST_EXECUTION_CONTEXT, agentPrincipalId: 'other-agent' },
+    });
+    expect(reused.outcome.state).toBe('APPROVAL_INVALIDATED');
+  });
+});
+
+describe('Gateway execution authentication', () => {
+  it('fails closed for embedded execution without an explicit context', async () => {
+    const gateway = new Gateway({ autoLoadPolicy: false });
+    gateway.registerTool({
+      name: 'safe.read',
+      server: 'test',
+      riskClass: 'READ_ONLY',
+      requiredPermissions: [],
+      retryable: false,
+      requiresApproval: false,
+    });
+    gateway.setExecutor('safe.read', async () => ({ secret: 'must-not-run' }));
+    const result = await gateway.execute('safe.read', {});
+    expect(result.outcome).toMatchObject({ state: 'DENIED', reasonCode: 'PERMISSION_DENIED' });
+  });
+
+  it('requires a workload credential on the HTTP execute route', async () => {
+    const response = await createGatewayRoutes(createGateway()).request('/execute', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ toolName: 'calendar.list_events', arguments: {} }),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it('accepts the bundled execution token only with explicit development mode', async () => {
+    const body = JSON.stringify({ toolName: 'calendar.list_events', arguments: {} });
+    const headers = {
+      authorization: 'Bearer dev-execution-token',
+      'content-type': 'application/json',
+    };
+    const closed = createGatewayRoutes(new Gateway({ autoLoadPolicy: false }));
+    expect((await closed.request('/execute', { method: 'POST', headers, body })).status).toBe(401);
+    expect(
+      (
+        await createGatewayRoutes(createGateway()).request('/execute', {
+          method: 'POST',
+          headers,
+          body,
+        })
+      ).status,
+    ).toBe(200);
+  });
+
+  it('does not enable the bundled admin token by default', async () => {
+    const routes = createGatewayRoutes(new Gateway({ autoLoadPolicy: false }));
+    expect((await routes.request('/auth/me', { headers: APPROVAL_AUTH_HEADERS })).status).toBe(401);
   });
 });
 
@@ -180,15 +276,21 @@ describe('Gateway policy file loading', () => {
 
     try {
       const policyFile = join(dir, 'ananke.policy.yaml');
-      writeFileSync(policyFile, [
-        'tools:',
-        '  gmail.send_email:',
-        '    risk: EXTERNAL_SEND',
-        '    approval: never',
-        '',
-      ].join('\n'));
+      writeFileSync(
+        policyFile,
+        [
+          'tools:',
+          '  gmail.send_email:',
+          '    risk: EXTERNAL_SEND',
+          '    approval: never',
+          '',
+        ].join('\n'),
+      );
 
-      const configured = new Gateway({ policyFile });
+      const configured = new Gateway({
+        policyFile,
+        embeddedExecutionContext: TEST_EXECUTION_CONTEXT,
+      });
       configured.approvals.clear();
       configured.registerTool({
         name: 'gmail.send_email',
@@ -253,7 +355,9 @@ describe('Gateway â€” Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs 
     expect(r1.outcome.state).toBe('WAITING_FOR_APPROVAL');
     gw.approvals.approve(r1.approvalGrantId!, TEST_OPERATOR);
 
-    const r2 = await gw.execute('gmail.send_email', modifiedArgs, { approvalId: r1.approvalGrantId });
+    const r2 = await gw.execute('gmail.send_email', modifiedArgs, {
+      approvalId: r1.approvalGrantId,
+    });
     expect(r2.outcome.state).toBe('APPROVAL_INVALIDATED');
     expect(r2.outcome.reasonCode).toBe('APPROVAL_HASH_MISMATCH');
     expect(r2.outcome.retryable).toBe(false);
@@ -271,7 +375,11 @@ describe('Gateway â€” Outcome Semantics: DENIED vs WAITING_FOR_APPROVAL vs 
     expect(denied.approvalRequired).toBeUndefined();
 
     // WAITING_FOR_APPROVAL
-    const waiting = await gw.execute('gmail.send_email', { to: 'a@b.com', subject: 'S', body: 'B' });
+    const waiting = await gw.execute('gmail.send_email', {
+      to: 'a@b.com',
+      subject: 'S',
+      body: 'B',
+    });
     expect(waiting.outcome.state).toBe('WAITING_FOR_APPROVAL');
     expect(waiting.outcome.retryable).toBe(true);
     expect(waiting.approvalRequired).toBe(true);
@@ -305,7 +413,11 @@ describe('Gateway â€” Permission Errors', () => {
     gw.approvals.approve(r1.approvalGrantId!, TEST_OPERATOR);
 
     // Execute with approval â€” should fail with PERMISSION_DENIED
-    const r2 = await gw.execute('github.delete_branch', { branch: 'main' }, { approvalId: r1.approvalGrantId });
+    const r2 = await gw.execute(
+      'github.delete_branch',
+      { branch: 'main' },
+      { approvalId: r1.approvalGrantId },
+    );
     expect(r2.outcome.state).toBe('FAILED');
     expect(r2.outcome.reasonCode).toBe('PERMISSION_DENIED');
   });
@@ -347,7 +459,7 @@ describe('Gateway approval API', () => {
     });
     expect(response.status).toBe(200);
 
-    const approvals = await response.json() as Array<{
+    const approvals = (await response.json()) as Array<{
       riskClass: string;
       canonicalPayload: string;
       status: string;
@@ -369,21 +481,27 @@ describe('Gateway approval API', () => {
     expect(beforeApproval.outcome.state).toBe('WAITING_FOR_APPROVAL');
 
     const routes = createGatewayRoutes(gw);
-    const approveResponse = await routes.request(`/approvals/${requested.approvalGrantId}/approve`, {
-      method: 'POST',
-      body: JSON.stringify({ approvedBy: 'spoofed-attacker' }),
-      headers: APPROVAL_AUTH_HEADERS,
-    });
+    const approveResponse = await routes.request(
+      `/approvals/${requested.approvalGrantId}/approve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ approvedBy: 'spoofed-attacker' }),
+        headers: APPROVAL_AUTH_HEADERS,
+      },
+    );
     expect(approveResponse.status).toBe(200);
-    const approvedGrant = await approveResponse.json() as { approvedBy: string; approvedBySessionId: string };
+    const approvedGrant = (await approveResponse.json()) as {
+      approvedBy: string;
+      approvedBySessionId: string;
+    };
     expect(approvedGrant.approvedBy).toBe('local-dashboard');
     expect(approvedGrant.approvedBySessionId).toBe('local-dev-session');
 
     const grantedEvent = gw.audit.query({ eventType: 'APPROVAL_GRANTED' }).at(-1);
     expect(grantedEvent?.metadata).toMatchObject({
       decision: 'approved',
-      operatorId: 'local-dashboard',
-      sessionId: 'local-dev-session',
+      operatorId: expect.stringMatching(/^sha256:/),
+      sessionId: expect.stringMatching(/^sha256:/),
       authMethod: 'dev-token',
       operatorRoles: ['admin'],
     });
@@ -406,15 +524,18 @@ describe('Gateway approval API', () => {
       headers: APPROVAL_AUTH_HEADERS,
     });
     expect(rejectResponse.status).toBe(200);
-    const rejectedGrant = await rejectResponse.json() as { rejectedBy: string; rejectedBySessionId: string };
+    const rejectedGrant = (await rejectResponse.json()) as {
+      rejectedBy: string;
+      rejectedBySessionId: string;
+    };
     expect(rejectedGrant.rejectedBy).toBe('local-dashboard');
     expect(rejectedGrant.rejectedBySessionId).toBe('local-dev-session');
 
     const deniedEvent = gw.audit.query({ eventType: 'APPROVAL_DENIED' }).at(-1);
     expect(deniedEvent?.metadata).toMatchObject({
       decision: 'rejected',
-      operatorId: 'local-dashboard',
-      sessionId: 'local-dev-session',
+      operatorId: expect.stringMatching(/^sha256:/),
+      sessionId: expect.stringMatching(/^sha256:/),
       authMethod: 'dev-token',
       operatorRoles: ['admin'],
     });
@@ -428,12 +549,19 @@ describe('Gateway approval API', () => {
 
   it('rejects unauthenticated approval decisions', async () => {
     const gw = createGateway();
-    const requested = await gw.execute('gmail.send_email', { to: 'a@b.com', subject: 'S', body: 'B' });
+    const requested = await gw.execute('gmail.send_email', {
+      to: 'a@b.com',
+      subject: 'S',
+      body: 'B',
+    });
 
     const routes = createGatewayRoutes(gw);
-    const approveResponse = await routes.request(`/approvals/${requested.approvalGrantId}/approve`, {
-      method: 'POST',
-    });
+    const approveResponse = await routes.request(
+      `/approvals/${requested.approvalGrantId}/approve`,
+      {
+        method: 'POST',
+      },
+    );
 
     expect(approveResponse.status).toBe(401);
     expect(gw.approvals.get(requested.approvalGrantId!)?.status).toBe('pending');
@@ -441,15 +569,22 @@ describe('Gateway approval API', () => {
 
   it('rejects invalid approval operator tokens', async () => {
     const gw = createGateway();
-    const requested = await gw.execute('gmail.send_email', { to: 'a@b.com', subject: 'S', body: 'B' });
+    const requested = await gw.execute('gmail.send_email', {
+      to: 'a@b.com',
+      subject: 'S',
+      body: 'B',
+    });
 
     const routes = createGatewayRoutes(gw);
-    const approveResponse = await routes.request(`/approvals/${requested.approvalGrantId}/approve`, {
-      method: 'POST',
-      headers: {
-        authorization: 'Bearer not-valid',
+    const approveResponse = await routes.request(
+      `/approvals/${requested.approvalGrantId}/approve`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer not-valid',
+        },
       },
-    });
+    );
 
     expect(approveResponse.status).toBe(401);
     expect(gw.approvals.get(requested.approvalGrantId!)?.status).toBe('pending');
@@ -478,7 +613,7 @@ describe('Gateway audit API', () => {
     });
 
     expect(response.status).toBe(200);
-    const events = await response.json() as Array<{ eventType: string; toolName: string }>;
+    const events = (await response.json()) as Array<{ eventType: string; toolName: string }>;
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       eventType: 'APPROVAL_REQUESTED',
@@ -509,9 +644,21 @@ describe('Gateway audit API', () => {
 
 describe('Gateway operator RBAC', () => {
   const tokens = {
-    'viewer-token': { operatorId: 'viewer-1', sessionId: 'viewer-session', roles: ['viewer' as const] },
-    'approver-token': { operatorId: 'approver-1', sessionId: 'approver-session', roles: ['approver' as const] },
-    'auditor-token': { operatorId: 'auditor-1', sessionId: 'auditor-session', roles: ['auditor' as const] },
+    'viewer-token': {
+      operatorId: 'viewer-1',
+      sessionId: 'viewer-session',
+      roles: ['viewer' as const],
+    },
+    'approver-token': {
+      operatorId: 'approver-1',
+      sessionId: 'approver-session',
+      roles: ['approver' as const],
+    },
+    'auditor-token': {
+      operatorId: 'auditor-1',
+      sessionId: 'auditor-session',
+      roles: ['auditor' as const],
+    },
   };
 
   function headers(token: string): Record<string, string> {
@@ -533,7 +680,13 @@ describe('Gateway operator RBAC', () => {
 
   it('allows approvers to decide approvals but denies access to audit data', async () => {
     const gw = new Gateway({ operatorAuth: { tokens } });
-    const { grant } = gw.approvals.requestApproval('example.write', { value: 1 });
+    const { grant } = gw.approvals.requestApproval(
+      'test',
+      'example.write',
+      { value: 1 },
+      TEST_EXECUTION_CONTEXT,
+      new Date(Date.now() + 60_000).toISOString(),
+    );
     const routes = createGatewayRoutes(gw);
 
     const approve = await routes.request(`/approvals/${grant.id}/approve`, {
@@ -549,7 +702,13 @@ describe('Gateway operator RBAC', () => {
 
   it('allows auditors to read audit data but denies approval decisions', async () => {
     const gw = new Gateway({ operatorAuth: { tokens } });
-    const { grant } = gw.approvals.requestApproval('example.write', { value: 1 });
+    const { grant } = gw.approvals.requestApproval(
+      'test',
+      'example.write',
+      { value: 1 },
+      TEST_EXECUTION_CONTEXT,
+      new Date(Date.now() + 60_000).toISOString(),
+    );
     const routes = createGatewayRoutes(gw);
 
     const audit = await routes.request('/audit', { headers: headers('auditor-token') });
@@ -568,7 +727,9 @@ describe('Gateway operator RBAC', () => {
     const routes = createGatewayRoutes(gw);
 
     expect((await routes.request('/stats', { headers: headers('viewer-token') })).status).toBe(200);
-    expect((await routes.request('/approvals', { headers: headers('viewer-token') })).status).toBe(403);
+    expect((await routes.request('/approvals', { headers: headers('viewer-token') })).status).toBe(
+      403,
+    );
     expect((await routes.request('/audit', { headers: headers('viewer-token') })).status).toBe(403);
   });
 

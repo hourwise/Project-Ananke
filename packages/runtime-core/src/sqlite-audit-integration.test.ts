@@ -3,16 +3,28 @@ import { SqliteAuditLog } from '@ananke/audit-engine';
 import { Gateway } from './index.js';
 import { unlinkSync } from 'node:fs';
 
-const TEST_DB = './test-audit.db';
+const TEST_DB = './test-runtime-audit.db';
 
 describe('Gateway with SqliteAuditLog', () => {
   afterEach(() => {
-    try { unlinkSync(TEST_DB); } catch { /* ok */ }
+    try {
+      unlinkSync(TEST_DB);
+    } catch {
+      /* ok */
+    }
   });
 
   it('uses SQLite audit when configured', async () => {
     const sqliteAudit = new SqliteAuditLog(TEST_DB);
-    const gw = new Gateway({ audit: sqliteAudit });
+    const gw = new Gateway({
+      audit: sqliteAudit,
+      embeddedExecutionContext: {
+        agentPrincipalId: 'test-agent',
+        tenantId: 'test-tenant',
+        resourceScope: 'test:*',
+        sessionId: 'test-session',
+      },
+    });
 
     gw.registerTool({
       name: 'test.tool',

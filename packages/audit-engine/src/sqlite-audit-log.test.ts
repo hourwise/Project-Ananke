@@ -3,10 +3,16 @@ import { SqliteAuditLog } from './sqlite-audit-log.js';
 import type { Outcome } from '@ananke/schema';
 import { unlinkSync } from 'node:fs';
 
-const TEST_DB = './test-audit.db';
+const TEST_DB = './test-audit-engine.db';
 
 function okOutcome(overrides: Partial<Outcome> = {}): Outcome {
-  return { state: 'COMPLETED', retryable: false, requiresUser: false, safeToContinue: true, ...overrides };
+  return {
+    state: 'COMPLETED',
+    retryable: false,
+    requiresUser: false,
+    safeToContinue: true,
+    ...overrides,
+  };
 }
 
 describe('SqliteAuditLog', () => {
@@ -18,7 +24,11 @@ describe('SqliteAuditLog', () => {
 
   afterEach(() => {
     audit.close();
-    try { unlinkSync(TEST_DB); } catch { /* ok */ }
+    try {
+      unlinkSync(TEST_DB);
+    } catch {
+      /* ok */
+    }
   });
 
   it('starts with zero events', () => {
@@ -35,7 +45,7 @@ describe('SqliteAuditLog', () => {
     expect(events[0]!.eventType).toBe('TOOL_CALL_REQUESTED');
     expect(events[0]!.toolName).toBe('test.tool');
     expect(events[0]!.serverName).toBe('test-server');
-    expect(events[0]!.arguments).toEqual({ key: 'value' });
+    expect(events[0]!.arguments).toEqual({ _redacted: true, fieldCount: 1 });
   });
 
   it('persists across close/reopen', () => {
@@ -73,8 +83,37 @@ describe('SqliteAuditLog', () => {
 
     const limited = audit.query({ limit: 2 });
     expect(limited).toHaveLength(2);
-    // Most recent first
-    expect(limited[0]!.arguments).toEqual({ n: 3 });
+    expect(limited[0]!.arguments).toEqual({ _redacted: true, fieldCount: 1 });
+  });
+
+  it('never persists raw arguments, outcome payloads, errors, or secret metadata', () => {
+    audit.recordToolCallRequested('sensitive.tool', {
+      apiKey: 'sk-sensitive',
+      fileContents: 'private file text',
+    });
+    audit.recordToolFailed(
+      'sensitive.tool',
+      okOutcome({
+        state: 'FAILED',
+        data: { returnedCredential: 'credential-value' },
+        error: 'failure contains personal data',
+      }),
+      1,
+    );
+    audit.recordApprovalGranted('sensitive.tool', 'safe-hash', {
+      authorizationToken: 'bearer-sensitive',
+      operatorId: 'person@example.com',
+      value: 'secret-under-an-innocent-key',
+    });
+
+    const serialized = JSON.stringify(audit.all());
+    expect(serialized).not.toContain('sk-sensitive');
+    expect(serialized).not.toContain('private file text');
+    expect(serialized).not.toContain('credential-value');
+    expect(serialized).not.toContain('personal data');
+    expect(serialized).not.toContain('bearer-sensitive');
+    expect(serialized).not.toContain('person@example.com');
+    expect(serialized).not.toContain('secret-under-an-innocent-key');
   });
 
   it('clears all events', () => {

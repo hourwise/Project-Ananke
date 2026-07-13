@@ -9,7 +9,7 @@ Ananke exposes a REST API for tool execution, approvals, and audit queries.
 | `GET` | `/` | Health check - returns `{ name, version }` |
 | `GET` | `/api/tools` | List all registered tools with risk metadata |
 | `GET` | `/api/tools/:name` | Get a single tool's metadata |
-| `POST` | `/api/execute` | Execute a tool call - `{ toolName, arguments, approvalId?, contentAccess?, contentApprovalId? }` |
+| `POST` | `/api/execute` | Authenticated workload execution - `{ toolName, arguments, approvalId?, contentAccess?, contentApprovalId? }` |
 | `GET` | `/api/auth/me` | Verified operator identity, roles, and effective permissions |
 | `POST` | `/api/auth/logout` | Revoke the authenticated Ananke operator session |
 | `GET` | `/api/approvals` | List pending grants; requires `approvals:read` |
@@ -22,6 +22,8 @@ Ananke exposes a REST API for tool execution, approvals, and audit queries.
 | `GET` | `/api/stats` | Runtime stats; requires `stats:read` |
 
 ## Execute Response
+
+`POST /api/execute` requires a workload bearer credential. Missing or invalid credentials return `401`; caller, agent, tenant, resource, session, and policy identity are never accepted from the JSON body. Explicit local development mode provides `dev-execution-token`; production deployments must configure `executionAuth`.
 
 The `/api/execute` endpoint returns an outcome envelope:
 
@@ -60,7 +62,7 @@ When policy requires elevated exposure, the gateway creates a pending content re
 
 ## Audit Query
 
-`GET /api/audit` requires an authenticated operator with the `audit:read` permission because audit events can contain tool arguments and approval metadata.
+`GET /api/audit` requires an authenticated operator with the `audit:read` permission. A central sanitizer runs before every audit backend: arguments are reduced to shape-only markers, outcome payload/error text is removed, and sensitive metadata is redacted or pseudonymized.
 
 Optional filters are `toolName`, `eventType`, and `since` (an ISO 8601 timestamp). `limit` defaults to 100 and accepts integers from 1 through 500. Invalid filters return `400` rather than being passed to the audit backend.
 
@@ -98,7 +100,7 @@ The same credential then receives `401` from operator endpoints, even if its JWT
 
 ## Approval Response
 
-Operator endpoints accept a signed OIDC JWT in production mode. The bundled local development mode accepts:
+Operator endpoints accept a signed OIDC JWT in production mode. Explicit local development mode accepts:
 
 ```http
 Authorization: Bearer dev-approval-token
@@ -113,12 +115,21 @@ See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md) for OIDC conf
 ```json
 {
   "id": "approval-id",
+  "serverName": "filesystem",
   "toolName": "filesystem.write_file",
   "riskClass": "INTERNAL_WRITE",
   "status": "pending",
   "arguments": { "path": "note.txt", "content": "hello" },
   "canonicalPayload": "{\"content\":\"hello\",\"path\":\"note.txt\"}",
-  "canonicalHash": "...",
+  "actionHash": "...",
+  "executionContext": {
+    "agentPrincipalId": "agent-1",
+    "tenantId": "tenant-1",
+    "resourceScope": "filesystem:/workspace",
+    "sessionId": "agent-session-1",
+    "policyVersion": "policy-v1"
+  },
+  "expiresAt": "2026-07-08T12:05:00.000Z",
   "requestedAt": "2026-07-08T12:00:00.000Z"
 }
 ```
@@ -130,9 +141,9 @@ Approval decision audit metadata includes:
 ```json
 {
   "decision": "approved",
-  "operatorId": "local-dashboard",
-  "operatorDisplayName": "Local Dashboard",
-  "sessionId": "local-dev-session",
+  "operatorId": "sha256:...",
+  "operatorDisplayName": "[REDACTED]",
+  "sessionId": "sha256:...",
   "authMethod": "dev-token",
   "decidedAt": "2026-07-08T12:00:00.000Z"
 }

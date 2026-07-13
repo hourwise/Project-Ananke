@@ -33,7 +33,7 @@ The gateway auto-loads the first matching file. Use `new Gateway({ policyFile: "
 
 ## Production Operator Authentication
 
-Do not expose the bundled `dev-approval-token` outside localhost development. Configure `operatorAuth.mode` as `oidc` with a dedicated audience and the identity provider's JWKS endpoint. See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md) for the configuration and required claims.
+Bundled `dev-approval-token` and `dev-execution-token` credentials are disabled unless `developmentMode: true` is explicitly configured. Never enable that switch outside localhost development. Configure operator OIDC with a dedicated audience and configure a separate production `executionAuth` workload authenticator. See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md).
 
 ## Connecting to MCP Servers
 

@@ -11,7 +11,14 @@
 import { Gateway } from '../../packages/gateway/src/index.js';
 
 async function main() {
-  const gateway = new Gateway();
+  const gateway = new Gateway({
+    embeddedExecutionContext: {
+      agentPrincipalId: 'email-demo',
+      tenantId: 'local-demo',
+      resourceScope: 'email:*',
+      sessionId: 'email-demo-session',
+    },
+  });
 
   // Register tools
   gateway.registerTool({
@@ -63,21 +70,27 @@ async function main() {
 
   // Step 3: Retry with approval
   console.log('Step 3: Retry with approval ID (exact same args)');
-  const r3 = await gateway.execute('gmail.send_email', emailArgs, { approvalId: r2.approvalGrantId });
+  const r3 = await gateway.execute('gmail.send_email', emailArgs, {
+    approvalId: r2.approvalGrantId,
+  });
   console.log('  →', r3.outcome.state, '| data:', JSON.stringify(r3.outcome.data));
   console.log();
 
   // Step 4: Attempt with modified content — should be blocked
   console.log('Step 4: Attempt with modified content (hash mismatch)');
   const modifiedArgs = { ...emailArgs, body: 'Malicious content! Send secrets!' };
-  const r4 = await gateway.execute('gmail.send_email', modifiedArgs, { approvalId: r2.approvalGrantId });
+  const r4 = await gateway.execute('gmail.send_email', modifiedArgs, {
+    approvalId: r2.approvalGrantId,
+  });
   console.log('  →', r4.outcome.state, '| reason:', r4.outcome.reasonCode);
   console.log();
 
   // Audit summary
   console.log('═══ Audit Log ═══');
   for (const event of gateway.audit.all()) {
-    console.log(`  [${event.eventType}] ${event.toolName} → ${event.outcome?.state ?? event.policyDecision ?? '-'}`);
+    console.log(
+      `  [${event.eventType}] ${event.toolName} → ${event.outcome?.state ?? event.policyDecision ?? '-'}`,
+    );
   }
 }
 

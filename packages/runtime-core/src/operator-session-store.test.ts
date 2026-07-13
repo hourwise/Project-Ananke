@@ -29,7 +29,9 @@ describe('operator session lifecycle', () => {
         active: true,
         transition: 'started',
       });
-      expect(firstStore.revoke(DEV_OPERATOR.sessionId, DEV_OPERATOR.operatorId, 'operator_logout')).toMatchObject({
+      expect(
+        firstStore.revoke(DEV_OPERATOR.sessionId, DEV_OPERATOR.operatorId, 'operator_logout'),
+      ).toMatchObject({
         sessionId: DEV_OPERATOR.sessionId,
         revocationReason: 'operator_logout',
       });
@@ -96,7 +98,7 @@ describe('operator session lifecycle', () => {
   });
 
   it('logs out through the API and denies reuse of the same credential', async () => {
-    const gateway = new Gateway({ autoLoadPolicy: false });
+    const gateway = new Gateway({ autoLoadPolicy: false, developmentMode: true });
     const routes = createGatewayRoutes(gateway);
     const headers = { authorization: 'Bearer dev-approval-token' };
 

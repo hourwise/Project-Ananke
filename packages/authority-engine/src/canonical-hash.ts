@@ -1,4 +1,13 @@
 import { createHash } from 'node:crypto';
+import type { ExecutionContext, OperatorIdentity } from '@ananke/schema';
+
+export interface ApprovalAction {
+  serverName: string;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  executionContext: ExecutionContext;
+  expiresAt: string;
+}
 
 /**
  * Canonical JSON serialization:
@@ -60,7 +69,8 @@ function serializeArray(value: unknown[], path: string, seen: WeakSet<object>): 
 
   const items: string[] = [];
   for (let index = 0; index < value.length; index += 1) {
-    if (!Object.hasOwn(value, index)) invalidValue(`${path}[${index}]`, 'sparse arrays are not supported');
+    if (!Object.hasOwn(value, index))
+      invalidValue(`${path}[${index}]`, 'sparse arrays are not supported');
     const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     if (!descriptor || !('value' in descriptor)) {
       invalidValue(`${path}[${index}]`, 'accessor properties are not supported');
@@ -105,6 +115,27 @@ function serializeObject(value: object, path: string, seen: WeakSet<object>): st
 export function hashCanonicalCall(args: Record<string, unknown>): string {
   const canonical = canonicalJson(args);
   return createHash('sha256').update(canonical).digest('hex');
+}
+
+/** Hash every non-human attribute that defines one executable action. */
+export function hashApprovalAction(action: ApprovalAction): string {
+  return createHash('sha256').update(canonicalJson(action)).digest('hex');
+}
+
+/** Add the authenticated human principal and session to the action binding. */
+export function hashApprovalBinding(
+  actionHash: string,
+  operator: Pick<OperatorIdentity, 'operatorId' | 'sessionId'>,
+): string {
+  return createHash('sha256')
+    .update(
+      canonicalJson({
+        actionHash,
+        humanPrincipalId: operator.operatorId,
+        humanSessionId: operator.sessionId,
+      }),
+    )
+    .digest('hex');
 }
 
 /**

@@ -92,7 +92,7 @@ npm install
 npm run validate:env                 # preflight diagnostics, writes environment report
 npm run validate:quick               # build, tests, benchmark, filesystem demo, reports
 npm run build
-npm test                            # 92 tests
+npm test                            # 108 tests
 npm run test:bench                  # writes validation-reports/*.json and *.csv
 npm run demo:filesystem             # MCP demo, also writes validation-reports/*.json and *.csv
 npx tsx examples/mock-mcp-server/index.ts
@@ -131,7 +131,16 @@ Ananke can govern MCP tools through the MCP adapter:
 import { Gateway } from "@ananke/runtime-core";
 import { McpAdapter } from "@ananke/mcp-adapter";
 
-const gateway = new Gateway({ port: 3000 });
+const gateway = new Gateway({
+  port: 3000,
+  developmentMode: true, // known local credentials; never enable in production
+  embeddedExecutionContext: {
+    agentPrincipalId: "local-demo-agent",
+    tenantId: "local-demo",
+    resourceScope: "filesystem:/tmp",
+    sessionId: "local-demo-session",
+  },
+});
 const adapter = new McpAdapter("filesystem", "npx", [
   "-y",
   "@modelcontextprotocol/server-filesystem",
@@ -174,17 +183,17 @@ Runtime Contracts should not contain engines, persistence, policies, databases, 
 
 ## Current Status
 
-Solid Phase 1 prototype. 92 tests pass across 12 test files. All 7 must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
+Solid Phase 1 prototype. 108 tests pass across 13 test files. All must-pass safety scenarios are verified. Engine architecture is stable. Not yet production-hardened.
 
 | What works | What is next |
 |-----------|--------------|
 | Typed outcome schema (8 states, 28 codes, including content-preflight outcomes) | Real MCP server validation beyond the demo |
-| Hash-bound approval binding | Production auth/RBAC for dashboard |
+| Full action/principal/scope/session/policy/expiry approval binding | Production workload identity integration |
 | Deterministic risk-class policy | MCP adapter validation |
-| SQLite + in-memory audit | Agent SDK for Claude/GPT/Gemini |
+| Centrally sanitized SQLite + in-memory audit | Agent SDK for Claude/GPT/Gemini |
 | MCP stdio adapter | Production-grade MCP server matrix |
 | Filesystem MCP demo and opt-in content-preflight enforcement with durable approval receipts | Source-aware scanners, receipt revocation, and downstream destination enforcement |
-| OIDC JWT operator authentication, RBAC, session revocation, and rotation tracking | IdP end-session/BFF integration and operator lifecycle controls |
+| Authenticated execution context plus OIDC operator RBAC/session lifecycle | IdP end-session/BFF integration and operator lifecycle controls |
 | Policy file loading | Policy expressiveness |
 
 [Full roadmap ->](docs/ROADMAP.md)

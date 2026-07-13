@@ -105,7 +105,9 @@ describe('Canonical Hash', () => {
     ];
 
     for (const value of unsupportedValues) {
-      expect(() => canonicalJson({ value })).toThrow('Approval payload must contain only JSON data');
+      expect(() => canonicalJson({ value })).toThrow(
+        'Approval payload must contain only JSON data',
+      );
     }
   });
 
@@ -128,7 +130,9 @@ describe('Canonical Hash', () => {
     expect(() => canonicalJson(hidden)).toThrow('non-enumerable properties are not supported');
 
     const shared = { value: 'approved' };
-    expect(() => canonicalJson({ first: shared, second: shared })).toThrow('shared object references are not supported');
+    expect(() => canonicalJson({ first: shared, second: shared })).toThrow(
+      'shared object references are not supported',
+    );
   });
 
   it('preserves whitespace inside strings', () => {
@@ -179,11 +183,41 @@ describe('Approval Store', () => {
     approvalStore.clearApprovals();
   });
 
+  const executionContext = {
+    agentPrincipalId: 'agent-1',
+    tenantId: 'tenant-1',
+    resourceScope: 'mail:*',
+    sessionId: 'agent-session-1',
+    policyVersion: 'policy-v1',
+  };
+  const expiresAt = '2999-01-01T00:00:00.000Z';
+
+  function store(id: string, args: Record<string, unknown>, expiry = expiresAt) {
+    return approvalStore.storeApproval(
+      id,
+      'mail-server',
+      'send_email',
+      args,
+      executionContext,
+      expiry,
+    );
+  }
+
+  function validate(id: string, args: Record<string, unknown>, overrides = {}) {
+    return approvalStore.validateApproval(id, {
+      serverName: 'mail-server',
+      toolName: 'send_email',
+      arguments: args,
+      executionContext,
+      ...overrides,
+    });
+  }
+
   it('validates an exact match', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
-    approvalStore.storeApproval('test-1', 'send_email', args);
+    store('test-1', args);
     approvalStore.approveApproval('test-1', TEST_OPERATOR);
-    const result = approvalStore.validateApproval('test-1', args);
+    const result = validate('test-1', args);
     expect(result.valid).toBe(true);
     expect(result.grant?.approvedBy).toBe('tester');
     expect(result.grant?.approvedBySessionId).toBe('test-session');
@@ -191,17 +225,17 @@ describe('Approval Store', () => {
 
   it('does not validate an approval before human approval', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
-    approvalStore.storeApproval('test-pending', 'send_email', args);
-    const result = approvalStore.validateApproval('test-pending', args);
+    store('test-pending', args);
+    const result = validate('test-pending', args);
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('Approval pending');
   });
 
   it('does not validate a rejected approval', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
-    approvalStore.storeApproval('test-rejected', 'send_email', args);
+    store('test-rejected', args);
     approvalStore.rejectApproval('test-rejected', TEST_OPERATOR);
-    const result = approvalStore.validateApproval('test-rejected', args);
+    const result = validate('test-rejected', args);
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('Approval rejected');
   });
@@ -209,31 +243,56 @@ describe('Approval Store', () => {
   it('rejects a mismatch', () => {
     const args = { to: 'bob@example.com', body: 'Hi' };
     const modified = { to: 'bob@example.com', body: 'Bye' };
-    approvalStore.storeApproval('test-2', 'send_email', args);
+    store('test-2', args);
     approvalStore.approveApproval('test-2', TEST_OPERATOR);
-    const result = approvalStore.validateApproval('test-2', modified);
+    const result = validate('test-2', modified);
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('APPROVAL_HASH_MISMATCH');
   });
 
   it('rejects already-consumed approvals', () => {
     const args = { body: 'Hi' };
-    approvalStore.storeApproval('test-3', 'send_email', args);
+    store('test-3', args);
     approvalStore.approveApproval('test-3', TEST_OPERATOR);
     approvalStore.consumeApproval('test-3');
-    const result = approvalStore.validateApproval('test-3', args);
+    const result = validate('test-3', args);
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('Approval already used');
   });
 
   it('rejects expired approvals', () => {
     const args = { body: 'Hi' };
-    approvalStore.storeApproval('test-expired', 'send_email', args, '2000-01-01T00:00:00.000Z');
+    store('test-expired', args, '2000-01-01T00:00:00.000Z');
     const approval = approvalStore.approveApproval('test-expired', TEST_OPERATOR);
-    const result = approvalStore.validateApproval('test-expired', args);
+    const result = validate('test-expired', args);
 
     expect(approval).toBeUndefined();
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('Approval expired');
+  });
+
+  it.each([
+    ['server', { serverName: 'other-server' }],
+    ['tool', { toolName: 'delete_email' }],
+    ['agent principal', { executionContext: { ...executionContext, agentPrincipalId: 'agent-2' } }],
+    ['tenant', { executionContext: { ...executionContext, tenantId: 'tenant-2' } }],
+    ['resource scope', { executionContext: { ...executionContext, resourceScope: 'mail:other' } }],
+    ['agent session', { executionContext: { ...executionContext, sessionId: 'agent-session-2' } }],
+    ['policy version', { executionContext: { ...executionContext, policyVersion: 'policy-v2' } }],
+  ])('rejects reuse for a different %s', (_label, override) => {
+    const args = { body: 'Hi' };
+    store('fully-bound', args);
+    approvalStore.approveApproval('fully-bound', TEST_OPERATOR);
+
+    expect(validate('fully-bound', args, override).reason).toBe('APPROVAL_HASH_MISMATCH');
+  });
+
+  it('rejects a tampered human binding', () => {
+    const args = { body: 'Hi' };
+    const grant = store('human-bound', args);
+    approvalStore.approveApproval('human-bound', TEST_OPERATOR);
+    grant.approvedBy = 'different-human';
+
+    expect(validate('human-bound', args).reason).toBe('APPROVAL_HASH_MISMATCH');
   });
 });

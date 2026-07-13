@@ -14,15 +14,15 @@ This contract applies only to requests routed through `Gateway.execute(...)` or 
 
 | Stage | Owner | Input | Output | Current invariant | Identifiers | Invalidation or failure | Retryability |
 |---|---|---|---|---|---|---|---|
-| Proposal | Integrator or agent client | `toolName`, `arguments`, optional `approvalId` | `Gateway.execute(...)` call or `POST /api/execute` payload | Governance begins only once the call reaches the gateway | `toolName`, optional `approvalId` | Ungoverned paths bypass Ananke entirely | Client-controlled |
-| Tool request audit | Gateway + audit engine | `toolName`, `arguments` | `TOOL_CALL_REQUESTED` audit event | Every `execute(...)` attempt records a tool-call event first | audit `id`, `timestamp`, `toolName` | Audit backend failure behaviour is not separately modeled in the public outcome contract | N/A |
+| Proposal | Integrator or agent client | authenticated execution context, `toolName`, `arguments`, optional `approvalId` | `Gateway.execute(...)` call or `POST /api/execute` payload | HTTP identity comes from the workload credential; embedding requires an explicit trusted context | `toolName`, optional `approvalId`, agent/tenant/scope/session/policy context | Missing execution identity returns `401` over HTTP or `PERMISSION_DENIED` when embedded | Client-controlled |
+| Tool request audit | Gateway + audit engine | `toolName`, `arguments` | sanitized `TOOL_CALL_REQUESTED` audit event | Raw argument values never cross the common audit sanitizer | audit `id`, `timestamp`, `toolName`, argument field count | Audit backend failure behaviour is not separately modeled in the public outcome contract | N/A |
 | Risk classification | Runtime core + registry classifier | `toolName` | `RiskClass` | Current classification is by registered tool identity; unknown tools become `UNKNOWN` | `toolName`, `riskClass` | Missing registration yields `UNKNOWN` and then default `DENY` | Client may retry, but outcome is typically final unless registry or policy changes |
 | Policy classification | Policy engine | `toolName`, `riskClass` | `PolicyDecision` | Policy is re-evaluated on every execution attempt | `toolName`, `riskClass`, `policyDecision` | Current public decisions include `ALLOW`, `DENY`, and `REQUIRE_APPROVAL`; config `maxRetries` is parsed but not enforced here | Depends on resulting decision |
-| Approval requirement | Runtime core + authority engine | `toolName`, `arguments`, optional `approvalId` | Either `WAITING_FOR_APPROVAL` or an approval validation result | If policy returns `REQUIRE_APPROVAL` and no `approvalId` is supplied, the gateway creates a new grant and returns `WAITING_FOR_APPROVAL` with `reasonCode: "APPROVAL_REQUIRED"` | `ApprovalGrant.id`, `ApprovalGrant.toolName`, `canonicalHash` | Rejected policy is handled before approval logic and yields `DENIED` with `POLICY_DENIED` | Retryable by resubmitting with the returned `approvalGrantId` |
-| Canonicalisation | Authority engine | `arguments` | canonical JSON string and SHA-256 hash | Canonicalisation accepts only strict JSON-shaped payloads and sorts object keys recursively | canonical payload, `canonicalHash` | Unsupported runtime values throw before approval binding can be established | Client must normalize inputs before retrying |
-| Approval presentation | Approval API or dashboard | stored grant + registry metadata | approval review payload | The approval API exposes `arguments`, `canonicalPayload`, `canonicalHash`, `riskClass`, and grant status for operator review | `approvalId`, `canonicalHash`, operator identity, `riskClass` | Approval endpoints require authenticated operator context with `approvals:read` or `approvals:decide` | Operator can approve or reject; client can poll by re-executing |
+| Approval requirement | Runtime core + authority engine | server/tool, arguments, execution context, optional `approvalId` | Either `WAITING_FOR_APPROVAL` or an approval validation result | A new grant includes a bounded expiry and complete action binding | `ApprovalGrant.id`, `actionHash`, `expiresAt` | Rejected policy is handled before approval logic and yields `DENIED` with `POLICY_DENIED` | Retryable by resubmitting with the returned `approvalGrantId` |
+| Canonicalisation | Authority engine | complete action binding | canonical JSON string and SHA-256 `actionHash` | Canonicalisation accepts only strict JSON-shaped payloads and sorts object keys recursively | canonical payload, `actionHash` | Unsupported runtime values throw before approval binding can be established | Client must normalize inputs before retrying |
+| Approval presentation | Approval API or dashboard | stored grant + registry metadata | approval review payload | The approval API exposes arguments for human review plus `canonicalPayload`, `actionHash`, `riskClass`, and status | `approvalId`, `actionHash`, operator identity, `riskClass` | Approval endpoints require authenticated operator context with `approvals:read` or `approvals:decide` | Operator can approve or reject; client can poll by re-executing |
 | Approval decision | Operator + authority engine + audit engine | `approvalId`, authenticated operator context | updated approval grant | Approver identity is derived from authentication, not request-body fields | `approvedBy`, `approvedBySessionId`, `rejectedBy`, `rejectedBySessionId` | Missing or unauthorized operator requests return `401` or `403`; non-approvable grants return `404` from the API | Client can retry execution only after approval is granted |
-| Approval binding check | Authority engine inside execute path | `approvalId`, proposed `arguments` | `{ valid, reason }` | Current validation checks: grant exists, not used, not expired, not pending, not rejected, and argument hash matches | `approvalId`, `canonicalHash`, grant status | Non-pending and non-rejected invalid states currently collapse into the `APPROVAL_INVALIDATED` path in the gateway | Pending approvals are retryable; mismatches and other invalid grant states currently require new operator action or a new grant |
+| Approval binding check | Authority engine inside execute path | `approvalId`, proposed action and execution context | `{ valid, reason }` | Validation rechecks server, tool, canonical arguments, agent, tenant, resource scope, session, policy version, expiry, and authenticated human binding | `approvalId`, `actionHash`, `bindingHash`, grant status | A changed bound field returns `APPROVAL_INVALIDATED` | Pending approvals are retryable; mismatches require a new grant |
 | Execution | Tool router + executor | `toolName`, `arguments` | `ExecutionResult` | The gateway executes only after policy and any approval check pass | `toolName`, executor registration | Missing executor yields `FAILED` with `UNKNOWN_FAILURE`; downstream errors are classified heuristically | Depends on outcome `retryable` guidance and downstream semantics |
 | Outcome | Outcome engine | `ExecutionResult` or policy decision | `Outcome` envelope | Agents receive structured outcomes, not raw errors | `state`, `reasonCode`, `retryable`, `requiresUser`, `safeToContinue`, `nextAction` | Current runtime actively emits `COMPLETED`, `FAILED`, `DENIED`, `WAITING_FOR_APPROVAL`, and `APPROVAL_INVALIDATED`; other schema states are documented but not exercised the same way | Outcome-specific |
 | Post-execution approval consumption | Authority engine | valid `approvalId` after an execution attempt | grant marked `used` | Current gateway consumes the approval after the execution attempt returns, not only after successful side effects | `approvalId`, `used` | A used grant becomes invalid for future approval checks | Retrying after consumption requires a new approval flow if policy still requires approval |
@@ -50,26 +50,16 @@ This contract applies only to requests routed through `Gateway.execute(...)` or 
 
 ### 4. Approval Binding
 
-Current code establishes these binding fields at enforcement time:
+Current code establishes and rechecks these binding fields at enforcement time:
 
 - approval grant existence;
 - approval grant `used` state;
-- approval grant expiry if `expiresAt` is present;
+- required approval expiry;
 - approval grant status (`pending`, `approved`, `rejected`);
-- SHA-256 hash equality over canonicalized arguments.
-
-Stored but not currently re-checked in `checkApproval(...)`:
-
-- `toolName`.
-
-Not currently bound in the approval grant schema or validation path:
-
-- server identity;
-- risk class;
-- policy version;
-- canonicalisation version;
-- destination runtime;
-- operator purpose text.
+- server and tool identity;
+- SHA-256 equality over canonicalized arguments;
+- agent principal, tenant, resource scope, agent session, and policy version;
+- authenticated human principal and human session through `bindingHash`.
 
 ### 5. Execution and Outcome
 
@@ -93,13 +83,12 @@ Observed audit event patterns in the current runtime:
 Important current limitations:
 
 - `WAITING_FOR_APPROVAL` outcomes are returned to the client, but the gateway does not currently record `OUTCOME_GENERATED` for those return paths.
-- The audit schema field is named `approvalHash`, but the runtime execute path currently passes the `approvalId` for some rejection and invalidation events, while the operator API passes `grant.canonicalHash`.
+- Raw arguments, outcome payloads, error text, and sensitive metadata are removed before either audit backend.
 
 ## Documentation Conflicts And Open Questions
 
 - The public schema defines `STALE_STATE`, `TIMED_OUT`, and `PARTIAL_SUCCESS` as outcome states, but the current classifier and tests primarily use `FAILED` plus reason codes for those cases.
-- Approval expiry is supported in the store but not defined by the normal gateway request flow.
-- Policy is re-evaluated on every execution attempt, but approvals are not version-bound to a specific policy snapshot.
+- Policy is re-evaluated on every execution attempt and approvals are bound to the configured policy version.
 - The runtime currently consumes approvals after any execution attempt with a valid `approvalId`, including failed attempts. Whether that is the intended long-term contract should be treated as open until explicitly decided.
 
 ## Evidence

@@ -86,11 +86,7 @@ function npmVersion(): string {
 }
 
 function expectState(label: string, outcome: Outcome, expected: Outcome['state']): void {
-  assert.equal(
-    outcome.state,
-    expected,
-    `${label} expected ${expected}, got ${outcome.state}`,
-  );
+  assert.equal(outcome.state, expected, `${label} expected ${expected}, got ${outcome.state}`);
 }
 
 function printOutcome(label: string, outcome: Outcome, approvalId?: string): void {
@@ -184,10 +180,11 @@ function reportToCsv(report: FilesystemDemoReport): string {
     test.reproductionCommand,
   ]);
 
-  return [
-    headers.map(csvEscape).join(','),
-    ...rows.map((row) => row.map(csvEscape).join(',')),
-  ].join('\n') + '\n';
+  return (
+    [headers.map(csvEscape).join(','), ...rows.map((row) => row.map(csvEscape).join(','))].join(
+      '\n',
+    ) + '\n'
+  );
 }
 
 async function writeDemoReport(input: {
@@ -220,7 +217,9 @@ async function writeDemoReport(input: {
       arch: arch(),
       node: process.version,
       npm: npmVersion(),
-      harness: process.env.ANANKE_VALIDATION_HARNESS ?? (process.env.GITHUB_ACTIONS ? 'github-actions' : 'local'),
+      harness:
+        process.env.ANANKE_VALIDATION_HARNESS ??
+        (process.env.GITHUB_ACTIONS ? 'github-actions' : 'local'),
       model: process.env.ANANKE_VALIDATION_MODEL ?? 'unknown',
       mcpClient: 'stdio-filesystem',
     },
@@ -231,7 +230,10 @@ async function writeDemoReport(input: {
   };
 
   await mkdir(REPORT_DIR, { recursive: true });
-  await writeFile(join(REPORT_DIR, 'filesystem-demo-report.json'), JSON.stringify(report, null, 2) + '\n');
+  await writeFile(
+    join(REPORT_DIR, 'filesystem-demo-report.json'),
+    JSON.stringify(report, null, 2) + '\n',
+  );
   await writeFile(join(REPORT_DIR, 'filesystem-demo-report.csv'), reportToCsv(report));
   console.log(`validationReport=${join(REPORT_DIR, 'filesystem-demo-report.json')}`);
   console.log(`validationCsv=${join(REPORT_DIR, 'filesystem-demo-report.csv')}`);
@@ -262,7 +264,15 @@ async function main(): Promise<void> {
   await writeFile(join(workspaceDir, FILE_NAME), INITIAL_CONTENT, 'utf8');
 
   const audit = new SqliteAuditLog(auditDbPath);
-  const gateway = new Gateway({ audit });
+  const gateway = new Gateway({
+    audit,
+    embeddedExecutionContext: {
+      agentPrincipalId: 'filesystem-demo',
+      tenantId: 'local-demo',
+      resourceScope: 'filesystem:demo',
+      sessionId: 'filesystem-demo-session',
+    },
+  });
   const adapter = new McpAdapter('filesystem', process.execPath, [
     '--import',
     'tsx',
@@ -295,103 +305,134 @@ async function main(): Promise<void> {
     console.log(`SQLite audit: ${auditDbPath}`);
     console.log('');
 
-    const readResult = await recordStep(steps, {
-      testId: 'ANANKE-FILESYSTEM-DEMO-READ',
-      suite: 'Filesystem MCP Demo',
-      category: 'normal',
-      name: 'read_file_allowed',
-    }, async () => {
-      const result = await gateway.execute(readTool, readArgs);
-      expectState('read file', result.outcome, 'COMPLETED');
-      return { value: result, outcome: result.outcome };
-    });
+    const readResult = await recordStep(
+      steps,
+      {
+        testId: 'ANANKE-FILESYSTEM-DEMO-READ',
+        suite: 'Filesystem MCP Demo',
+        category: 'normal',
+        name: 'read_file_allowed',
+      },
+      async () => {
+        const result = await gateway.execute(readTool, readArgs);
+        expectState('read file', result.outcome, 'COMPLETED');
+        return { value: result, outcome: result.outcome };
+      },
+    );
     printOutcome('1. Read file allowed immediately', readResult.outcome);
 
-    const writeRequest = await recordStep(steps, {
-      testId: 'ANANKE-FILESYSTEM-DEMO-WAITING-FOR-APPROVAL',
-      suite: 'Filesystem MCP Demo',
-      category: 'approval',
-      name: 'write_waits_for_approval',
-    }, async () => {
-      const result = await gateway.execute(writeTool, writeArgs);
-      expectState('write without approval', result.outcome, 'WAITING_FOR_APPROVAL');
-      assert.ok(result.approvalGrantId, 'write request should return an approval id');
-      return { value: result, outcome: result.outcome };
-    });
-    printOutcome(
-      '2. Write waits for approval',
-      writeRequest.outcome,
-      writeRequest.approvalGrantId,
+    const writeRequest = await recordStep(
+      steps,
+      {
+        testId: 'ANANKE-FILESYSTEM-DEMO-WAITING-FOR-APPROVAL',
+        suite: 'Filesystem MCP Demo',
+        category: 'approval',
+        name: 'write_waits_for_approval',
+      },
+      async () => {
+        const result = await gateway.execute(writeTool, writeArgs);
+        expectState('write without approval', result.outcome, 'WAITING_FOR_APPROVAL');
+        assert.ok(result.approvalGrantId, 'write request should return an approval id');
+        return { value: result, outcome: result.outcome };
+      },
     );
+    printOutcome('2. Write waits for approval', writeRequest.outcome, writeRequest.approvalGrantId);
 
     const approvedGrant = gateway.approvals.approve(writeRequest.approvalGrantId, DEMO_OPERATOR);
     assert.ok(approvedGrant, 'demo-human should be able to approve the pending write');
-    gateway.audit.recordApprovalGranted(writeTool, approvedGrant.canonicalHash, approvalMetadata(DEMO_OPERATOR));
+    gateway.audit.recordApprovalGranted(
+      writeTool,
+      approvedGrant.bindingHash ?? approvedGrant.actionHash,
+      approvalMetadata(DEMO_OPERATOR),
+    );
     console.log('   Approved by demo-human');
 
-    const approvedWrite = await recordStep(steps, {
-      testId: 'ANANKE-FILESYSTEM-DEMO-APPROVED-WRITE',
-      suite: 'Filesystem MCP Demo',
-      category: 'approval',
-      name: 'exact_approved_write_executes',
-    }, async () => {
-      const result = await gateway.execute(writeTool, writeArgs, {
-        approvalId: writeRequest.approvalGrantId,
-      });
-      expectState('exact approved write', result.outcome, 'COMPLETED');
-      assert.equal(await readFile(join(workspaceDir, FILE_NAME), 'utf8'), APPROVED_CONTENT);
-      return { value: result, outcome: result.outcome };
-    });
+    const approvedWrite = await recordStep(
+      steps,
+      {
+        testId: 'ANANKE-FILESYSTEM-DEMO-APPROVED-WRITE',
+        suite: 'Filesystem MCP Demo',
+        category: 'approval',
+        name: 'exact_approved_write_executes',
+      },
+      async () => {
+        const result = await gateway.execute(writeTool, writeArgs, {
+          approvalId: writeRequest.approvalGrantId,
+        });
+        expectState('exact approved write', result.outcome, 'COMPLETED');
+        assert.equal(await readFile(join(workspaceDir, FILE_NAME), 'utf8'), APPROVED_CONTENT);
+        return { value: result, outcome: result.outcome };
+      },
+    );
     printOutcome('3. Exact approved write executes', approvedWrite.outcome);
 
     const secondWriteRequest = await gateway.execute(writeTool, {
       path: FILE_NAME,
       content: SECOND_APPROVED_CONTENT,
     });
-    expectState('second write without approval', secondWriteRequest.outcome, 'WAITING_FOR_APPROVAL');
+    expectState(
+      'second write without approval',
+      secondWriteRequest.outcome,
+      'WAITING_FOR_APPROVAL',
+    );
     assert.ok(secondWriteRequest.approvalGrantId, 'second write should return an approval id');
-    const secondGrant = gateway.approvals.approve(secondWriteRequest.approvalGrantId, DEMO_OPERATOR);
+    const secondGrant = gateway.approvals.approve(
+      secondWriteRequest.approvalGrantId,
+      DEMO_OPERATOR,
+    );
     assert.ok(secondGrant, 'demo-human should be able to approve the second pending write');
-    gateway.audit.recordApprovalGranted(writeTool, secondGrant.canonicalHash, approvalMetadata(DEMO_OPERATOR));
+    gateway.audit.recordApprovalGranted(
+      writeTool,
+      secondGrant.bindingHash ?? secondGrant.actionHash,
+      approvalMetadata(DEMO_OPERATOR),
+    );
 
-    const tamperedWrite = await recordStep(steps, {
-      testId: 'ANANKE-FILESYSTEM-DEMO-TAMPERED-WRITE',
-      suite: 'Filesystem MCP Demo',
-      category: 'malicious',
-      name: 'mutated_write_blocked',
-    }, async () => {
-      const result = await gateway.execute(
-        writeTool,
-        { path: FILE_NAME, content: TAMPERED_CONTENT },
-        { approvalId: secondWriteRequest.approvalGrantId },
-      );
-      expectState('tampered write', result.outcome, 'APPROVAL_INVALIDATED');
-      assert.equal(await readFile(join(workspaceDir, FILE_NAME), 'utf8'), APPROVED_CONTENT);
-      return { value: result, outcome: result.outcome };
-    });
+    const tamperedWrite = await recordStep(
+      steps,
+      {
+        testId: 'ANANKE-FILESYSTEM-DEMO-TAMPERED-WRITE',
+        suite: 'Filesystem MCP Demo',
+        category: 'malicious',
+        name: 'mutated_write_blocked',
+      },
+      async () => {
+        const result = await gateway.execute(
+          writeTool,
+          { path: FILE_NAME, content: TAMPERED_CONTENT },
+          { approvalId: secondWriteRequest.approvalGrantId },
+        );
+        expectState('tampered write', result.outcome, 'APPROVAL_INVALIDATED');
+        assert.equal(await readFile(join(workspaceDir, FILE_NAME), 'utf8'), APPROVED_CONTENT);
+        return { value: result, outcome: result.outcome };
+      },
+    );
     printOutcome('4. Mutated write after approval is blocked', tamperedWrite.outcome);
 
-    const auditEvents = await recordStep(steps, {
-      testId: 'ANANKE-FILESYSTEM-DEMO-AUDIT',
-      suite: 'Filesystem MCP Demo',
-      category: 'audit',
-      name: 'audit_log_captured',
-    }, async () => {
-      const events = audit.all();
-      const eventTypes = new Set(events.map((event) => event.eventType));
-      for (const expectedEvent of [
-        'TOOL_CALL_REQUESTED',
-        'POLICY_CHECKED',
-        'APPROVAL_REQUESTED',
-        'APPROVAL_GRANTED',
-        'APPROVAL_INVALIDATED',
-        'TOOL_EXECUTED',
-        'OUTCOME_GENERATED',
-      ] as const) {
-        assert.ok(eventTypes.has(expectedEvent), `missing audit event ${expectedEvent}`);
-      }
-      return { value: events };
-    });
+    const auditEvents = await recordStep(
+      steps,
+      {
+        testId: 'ANANKE-FILESYSTEM-DEMO-AUDIT',
+        suite: 'Filesystem MCP Demo',
+        category: 'audit',
+        name: 'audit_log_captured',
+      },
+      async () => {
+        const events = audit.all();
+        const eventTypes = new Set(events.map((event) => event.eventType));
+        for (const expectedEvent of [
+          'TOOL_CALL_REQUESTED',
+          'POLICY_CHECKED',
+          'APPROVAL_REQUESTED',
+          'APPROVAL_GRANTED',
+          'APPROVAL_INVALIDATED',
+          'TOOL_EXECUTED',
+          'OUTCOME_GENERATED',
+        ] as const) {
+          assert.ok(eventTypes.has(expectedEvent), `missing audit event ${expectedEvent}`);
+        }
+        return { value: events };
+      },
+    );
     auditEventCount = auditEvents.length;
 
     console.log('');

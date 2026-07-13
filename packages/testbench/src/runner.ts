@@ -2,7 +2,13 @@ import { Gateway } from '@ananke/runtime-core';
 import { join } from 'node:path';
 import { MOCK_TOOLS, MUST_PASS_SCENARIOS } from './mock-server.js';
 import { createValidationReport, writeValidationReport } from './validation-report.js';
-import type { ToolMetadata, Outcome, OperatorIdentity, PolicyDecision, RiskClass } from '@ananke/schema';
+import type {
+  ToolMetadata,
+  Outcome,
+  OperatorIdentity,
+  PolicyDecision,
+  RiskClass,
+} from '@ananke/schema';
 
 /**
  * Test scenario definition.
@@ -35,7 +41,10 @@ export interface ScenarioResult {
  */
 export async function runScenario(
   scenario: TestScenario,
-  execute: (tool: string, args: Record<string, unknown>) => Promise<{ outcome: Outcome; approvalRequired?: boolean }>,
+  execute: (
+    tool: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ outcome: Outcome; approvalRequired?: boolean }>,
 ): Promise<ScenarioResult> {
   const failures: string[] = [];
   const start = performance.now();
@@ -91,7 +100,10 @@ export async function runScenario(
  */
 export async function runBenchmark(
   scenarios: TestScenario[],
-  execute: (tool: string, args: Record<string, unknown>) => Promise<{ outcome: Outcome; approvalRequired?: boolean }>,
+  execute: (
+    tool: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ outcome: Outcome; approvalRequired?: boolean }>,
   runs = 10,
 ): Promise<{ results: ScenarioResult[][]; passRate: number; avgLatencyMs: number }> {
   const allResults: ScenarioResult[][] = [];
@@ -107,7 +119,8 @@ export async function runBenchmark(
   const flat = allResults.flat();
   const passed = flat.filter((r) => r.passed).length;
   const passRate = flat.length > 0 ? (passed / flat.length) * 100 : 100;
-  const avgLatencyMs = flat.length > 0 ? flat.reduce((a, r) => a + r.durationMs, 0) / flat.length : 0;
+  const avgLatencyMs =
+    flat.length > 0 ? flat.reduce((a, r) => a + r.durationMs, 0) / flat.length : 0;
 
   return { results: allResults, passRate, avgLatencyMs };
 }
@@ -132,7 +145,15 @@ const TOOL_RISK: Record<string, RiskClass> = {
 };
 
 function createBenchmarkGateway(): Gateway {
-  const gateway = new Gateway({ autoLoadPolicy: false });
+  const gateway = new Gateway({
+    autoLoadPolicy: false,
+    embeddedExecutionContext: {
+      agentPrincipalId: 'testbench-agent',
+      tenantId: 'testbench',
+      resourceScope: 'testbench:*',
+      sessionId: 'testbench-session',
+    },
+  });
   gateway.approvals.clear();
 
   for (const [name, executor] of Object.entries(MOCK_TOOLS)) {
@@ -182,15 +203,17 @@ async function executeScenario(
 
 async function main(): Promise<void> {
   const runs = Number(process.env.ANANKE_BENCH_RUNS ?? '3');
-  const reportDir = process.env.ANANKE_REPORT_DIR ?? join(process.env.INIT_CWD ?? process.cwd(), 'validation-reports');
+  const reportDir =
+    process.env.ANANKE_REPORT_DIR ??
+    join(process.env.INIT_CWD ?? process.cwd(), 'validation-reports');
   const startedAt = new Date().toISOString();
   const gateway = createBenchmarkGateway();
   const benchmark = await runBenchmark(
     MUST_PASS_SCENARIOS,
     (tool, args) => {
-      const scenario = MUST_PASS_SCENARIOS.find((candidate) => (
-        candidate.toolCall === tool && candidate.arguments === args
-      ));
+      const scenario = MUST_PASS_SCENARIOS.find(
+        (candidate) => candidate.toolCall === tool && candidate.arguments === args,
+      );
       if (!scenario) return gateway.execute(tool, args);
       return executeScenario(gateway, scenario);
     },
@@ -201,14 +224,18 @@ async function main(): Promise<void> {
   for (const [index, run] of benchmark.results.entries()) {
     for (const result of run) {
       const status = result.passed ? 'PASS' : 'FAIL';
-      console.log(`[${status}] run=${index + 1} scenario=${result.scenario} ${result.durationMs}ms`);
+      console.log(
+        `[${status}] run=${index + 1} scenario=${result.scenario} ${result.durationMs}ms`,
+      );
       for (const failure of result.failures) {
         console.error(`  - ${failure}`);
       }
     }
   }
 
-  console.log(`passRate=${benchmark.passRate.toFixed(2)} avgLatencyMs=${benchmark.avgLatencyMs.toFixed(1)}`);
+  console.log(
+    `passRate=${benchmark.passRate.toFixed(2)} avgLatencyMs=${benchmark.avgLatencyMs.toFixed(1)}`,
+  );
 
   const report = createValidationReport({
     startedAt,

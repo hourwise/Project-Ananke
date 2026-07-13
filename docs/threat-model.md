@@ -24,7 +24,7 @@ Security-relevant assets in the current repository:
 
 - governed tool credentials and handles held outside the agent path;
 - tool metadata registered with the gateway, especially `toolName`, `server`, and `riskClass`;
-- approval grants, including `id`, `toolName`, `canonicalHash`, status fields, timestamps, and operator identity fields;
+- approval grants, including `id`, server/tool identity, `actionHash`, `bindingHash`, execution context, expiry, status, and operator identity fields;
 - canonical payloads produced by `canonicalJson(...)`;
 - operator identity derived from authenticated request context;
 - audit events and any persistent SQLite audit database;
@@ -34,10 +34,10 @@ Security-relevant assets in the current repository:
 
 Current trust boundaries supported by repository evidence:
 
-- Agent to gateway: the agent can propose any tool call and arguments, but governance applies only if the action is routed through `Gateway.execute(...)`.
+- Agent to gateway: HTTP execution requires an authenticated workload identity; trusted embeddings must supply an explicit execution context. Governance applies only if the action is routed through `Gateway.execute(...)`.
 - Gateway to operator API: approval and audit endpoints trust authenticated operator identity, not request-body identity fields.
 - Gateway to tool executor: tool executors and MCP servers are outside the policy engine and can fail, time out, or return hostile content.
-- Gateway to audit storage: audit events are written by Ananke, but append-only protection is not enforced by the current code.
+- Gateway to audit storage: a shared sanitizer removes raw arguments and outcome payloads before every backend, but append-only protection is not enforced by the current code.
 - Deployment boundary: if the same agent can reach tools or credentials by another path, that path bypasses Ananke entirely.
 
 ## Trusted Components
@@ -85,11 +85,13 @@ This threat model does not assume Ananke can resist host compromise or a fully c
 | Threat | Current behaviour and evidence | Residual risk |
 |---|---|---|
 | Direct tool or credential bypass | Governance claims apply only to calls routed through Ananke. Accepted ADRs require exclusive routing and no raw credentials to agents. | If the same agent can still reach the MCP server, CLI, database, API key, terminal, or IDE extension path directly, Ananke does not govern that path. |
-| Approval substitution through spoofed identity fields | Approval and rejection routes derive operator identity from authenticated context and ignore request-body identity fields. Tests cover spoofed `approvedBy` and `rejectedBy`. | Protection depends on correct operator authentication deployment. The default `dev-approval-token` is only suitable for localhost development. |
+| Approval substitution through spoofed identity fields | Approval and rejection routes derive operator identity from authenticated context and ignore request-body identity fields. Tests cover spoofed `approvedBy` and `rejectedBy`. | Protection depends on correct operator authentication deployment. Bundled credentials exist only behind explicit `developmentMode`. |
 | Post-approval mutation | Approval validation rejects argument payload changes by recomputing the canonical hash. Gateway tests cover `APPROVAL_HASH_MISMATCH`. | Current validation is exact for supported JSON data only. Cross-language canonicalisation is not standardized yet. |
 | Replay of a used approval | Approval grants track `used`; validation rejects already-used grants. | Consumption happens after an execution attempt, even when that attempt fails. The current gateway also collapses several non-match failures into the `APPROVAL_INVALIDATED` path. Concurrent duplicate execution is not explicitly prevented. |
-| Approval reuse across the wrong tool | Approval grants store `toolName`. | Current validation checks the approval ID and canonical argument hash, but does not re-check `toolName` during `checkApproval(...)`. This means the stored tool name is not currently part of the enforcement invariant. |
-| Approval expiry ambiguity | Approval grants support `expiresAt`, and expired grants are rejected by the approval store. | The normal gateway request flow does not assign an expiry basis, so expiry policy is not currently defined at the integration level. |
+| Approval reuse across a different action | The action hash covers server, tool, canonical arguments, agent principal, tenant, resource scope, session, policy version, and expiry. Approval adds the authenticated human principal/session in `bindingHash`; every field is rechecked before execution. | Cross-language canonicalisation is not standardized yet; in-memory approval storage is not durable. |
+| Approval expiry | The gateway assigns a bounded expiry to every approval and validation rejects expired grants. | Deployments must choose an `approvalTtlMs` appropriate to their risk model. |
+| Sensitive audit persistence | A shared sanitizer reduces arguments to shape markers, removes outcome data/error text, redacts credential-like metadata, and pseudonymizes principal identifiers before either audit backend. Regression tests cover memory and SQLite. | Append-only integrity and deployment-specific metadata classification remain external responsibilities. |
+| Unauthenticated execution | `/api/execute` authenticates a workload and constructs agent, tenant, scope, session, and policy context outside the body. Direct embedding fails closed without explicit trusted context. | Token lifecycle and production workload identity issuance are deployment responsibilities. |
 | Stale state / changed resource version | The tool router maps stale/version errors to reason code `STALE_STATE`. | The public schema includes `STALE_STATE` as an outcome state, but the current classifier returns `FAILED` with `reasonCode: "STALE_STATE"`. Recovery is documented, but emitted state semantics are inconsistent. |
 | Confused deputy through broad tools | Unknown tools deny by default and risk classes are assigned explicitly through registry metadata. | Broad read, shell, database, filesystem, or network tools can still be overly powerful. Ananke is not a sandbox and does not reduce the executor's native authority. |
 | Malicious tool metadata | Accepted ADRs and security docs treat MCP metadata as untrusted input. | The repository does not implement metadata sanitisation or hidden-character hardening beyond documentation requirements. |

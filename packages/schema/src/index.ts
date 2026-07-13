@@ -128,13 +128,40 @@ export const OperatorIdentity = z.object({
 
 export type OperatorIdentity = z.infer<typeof OperatorIdentity>;
 
+// Authenticated workload identity attached to every execution request.
+export const ExecutionIdentity = z.object({
+  agentPrincipalId: z.string(),
+  tenantId: z.string(),
+  resourceScope: z.string(),
+  sessionId: z.string(),
+  authMethod: z.enum(['dev-token', 'workload-token']),
+  authenticatedAt: z.string(),
+});
+
+export type ExecutionIdentity = z.infer<typeof ExecutionIdentity>;
+
+// Complete non-human side of an approval binding. The policy version is
+// assigned by the gateway, never trusted from request input.
+export const ExecutionContext = z.object({
+  agentPrincipalId: z.string(),
+  tenantId: z.string(),
+  resourceScope: z.string(),
+  sessionId: z.string(),
+  policyVersion: z.string(),
+});
+
+export type ExecutionContext = z.infer<typeof ExecutionContext>;
+
 // ── Approval Grant ────────────────────────────────────────────
 
 export const ApprovalGrant = z.object({
   id: z.string(),
+  serverName: z.string(),
   toolName: z.string(),
-  canonicalHash: z.string(),
+  actionHash: z.string(),
+  bindingHash: z.string().optional(),
   arguments: z.record(z.unknown()),
+  executionContext: ExecutionContext,
   status: z.enum(['pending', 'approved', 'rejected']).default('pending'),
   requestedAt: z.string(),
   approvedBy: z.string().optional(),
@@ -143,7 +170,7 @@ export const ApprovalGrant = z.object({
   rejectedBy: z.string().optional(),
   rejectedBySessionId: z.string().optional(),
   rejectedAt: z.string().optional(),
-  expiresAt: z.string().optional(),
+  expiresAt: z.string(),
   used: z.boolean().default(false),
 });
 
@@ -266,46 +293,52 @@ export const ContentSurfaceObservation = z.object({
 
 export type ContentSurfaceObservation = z.infer<typeof ContentSurfaceObservation>;
 
-export const ContentSelection = z.object({
-  fields: z.array(z.string().min(1)).min(1).optional(),
-  ranges: z.array(z.object({
-    start: z.number().int().nonnegative(),
-    end: z.number().int().positive(),
-  }).refine((range) => range.end > range.start, {
-    message: 'selection range end must be greater than start',
-  })).min(1).optional(),
-}).refine((selection) => Boolean(selection.fields?.length || selection.ranges?.length), {
-  message: 'selection must include fields or ranges',
-});
+export const ContentSelection = z
+  .object({
+    fields: z.array(z.string().min(1)).min(1).optional(),
+    ranges: z
+      .array(
+        z
+          .object({
+            start: z.number().int().nonnegative(),
+            end: z.number().int().positive(),
+          })
+          .refine((range) => range.end > range.start, {
+            message: 'selection range end must be greater than start',
+          }),
+      )
+      .min(1)
+      .optional(),
+  })
+  .refine((selection) => Boolean(selection.fields?.length || selection.ranges?.length), {
+    message: 'selection must include fields or ranges',
+  });
 
 export type ContentSelection = z.infer<typeof ContentSelection>;
 
-export const ContentAccessRequest = z.object({
-  requestedExposure: ContentExposureLevel,
-  destination: z.object({
-    runtime: z.string().min(1),
-    agentId: z.string().min(1).optional(),
-  }),
-  purpose: z.string().min(1),
-  selection: ContentSelection.optional(),
-}).superRefine((request, context) => {
-  if (request.requestedExposure === 'SELECTED_CONTENT' && !request.selection) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['selection'],
-      message: 'selected content requires an explicit selection',
-    });
-  }
-});
+export const ContentAccessRequest = z
+  .object({
+    requestedExposure: ContentExposureLevel,
+    destination: z.object({
+      runtime: z.string().min(1),
+      agentId: z.string().min(1).optional(),
+    }),
+    purpose: z.string().min(1),
+    selection: ContentSelection.optional(),
+  })
+  .superRefine((request, context) => {
+    if (request.requestedExposure === 'SELECTED_CONTENT' && !request.selection) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['selection'],
+        message: 'selected content requires an explicit selection',
+      });
+    }
+  });
 
 export type ContentAccessRequest = z.infer<typeof ContentAccessRequest>;
 
-export const ContentAccessAction = z.enum([
-  'ALLOW',
-  'REQUIRE_APPROVAL',
-  'DENY',
-  'QUARANTINE',
-]);
+export const ContentAccessAction = z.enum(['ALLOW', 'REQUIRE_APPROVAL', 'DENY', 'QUARANTINE']);
 
 export type ContentAccessAction = z.infer<typeof ContentAccessAction>;
 

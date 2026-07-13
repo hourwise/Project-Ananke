@@ -6,18 +6,18 @@ The approval dashboard is part of the authority boundary. It must help a human a
 
 For every approval request, the dashboard must show:
 
-- Tool name
+- Server and tool name
 - Risk class
 - Human-readable arguments
 - Canonical payload preview
-- Hash
+- Action hash and complete bound execution context
 - Approval or rejection decision
 - Timestamp
 - Approving user/session
 
 ## Binding Rule
 
-The human approves readable content. The hash enforces that the approved content is exactly what executes.
+The human approves readable content for a specific server/tool, agent principal, tenant, resource scope, agent session, policy version, and expiry. The action and human binding hashes enforce that exact action.
 
 This means the UI must make the readable content and the canonical payload relationship clear. The user should not be asked to approve an opaque hash without seeing the relevant arguments.
 
@@ -25,13 +25,13 @@ This means the UI must make the readable content and the canonical payload relat
 
 Approval identity must come from authenticated dashboard/API context. The backend must ignore `approvedBy`, `rejectedBy`, operator ID, or session ID values supplied in the request body.
 
-For the local development dashboard, approval queue and decision endpoints accept:
+When the gateway is explicitly configured with `developmentMode: true`, the local dashboard approval endpoints accept:
 
 ```http
 Authorization: Bearer dev-approval-token
 ```
 
-This token is for local development only. Production mode verifies signed OIDC JWTs, enforces the `viewer`, `approver`, `auditor`, and `admin` roles, and can use durable SQLite session storage with immediate local revocation. Identity-provider login/logout integration and operator lifecycle controls remain deployment work. See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md).
+Without that switch the known token fails closed. It is for localhost development only. Production mode verifies signed OIDC JWTs, enforces the `viewer`, `approver`, `auditor`, and `admin` roles, and can use durable SQLite session storage with immediate local revocation. Identity-provider login/logout integration and operator lifecycle controls remain deployment work. See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md).
 
 ## Minimum Security Requirements
 

@@ -43,7 +43,7 @@ Deployment assumptions:
 
 Local development assumptions:
 
-- the bundled `dev-approval-token` is for localhost development only;
+- bundled `dev-approval-token` and `dev-execution-token` credentials are enabled only by explicit `developmentMode: true` and are for localhost development only;
 - the local operator and the local agent may share a machine, so host compromise or terminal access can bypass governance;
 - development convenience settings should not be treated as production controls.
 

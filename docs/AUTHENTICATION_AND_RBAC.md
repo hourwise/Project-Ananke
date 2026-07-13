@@ -65,25 +65,17 @@ The identity provider remains responsible for login, MFA, group-to-role assignme
 
 ## Local Development Mode
 
-Development mode preserves the bundled local dashboard workflow:
+Known bundled credentials are disabled by default. They are enabled only by the explicit local-development switch:
 
 ```ts
 const gateway = new Gateway({
-  operatorAuth: {
-    mode: 'development',
-    tokens: {
-      'replace-this-local-secret': {
-        operatorId: 'local-operator',
-        displayName: 'Local Operator',
-        sessionId: 'local-session',
-        roles: ['admin'],
-      },
-    },
-  },
+  developmentMode: true,
 });
 ```
 
-If `operatorAuth` is omitted, the prototype default token remains `dev-approval-token`. This default is for localhost development only and must never be exposed on a shared or production network.
+This enables `dev-approval-token` for the local dashboard and `dev-execution-token` for local workload calls. If `developmentMode` is omitted or false, both credentials fail closed. Production and shared environments must configure independent operator and execution authenticators or token maps and must never enable this switch.
+
+Execution credentials resolve to an agent principal, tenant, resource scope, and session. The gateway adds the configured policy version; request bodies cannot supply or override identity fields. In-process callers must configure `embeddedExecutionContext` or pass a trusted `executionContext` explicitly.
 
 ## Operator Endpoints
 

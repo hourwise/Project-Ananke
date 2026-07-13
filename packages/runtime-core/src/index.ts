@@ -9,16 +9,21 @@ import {
   loadPolicyConfigFile,
   PolicyEngine,
 } from '@ananke/policy-engine';
-import { ApprovalEngine } from '@ananke/authority-engine';
+import { ApprovalEngine, hashCanonicalCall } from '@ananke/authority-engine';
 import { executeTool, type ToolExecutor } from '@ananke/tool-router';
 import { classifyOutcome } from '@ananke/outcome-engine';
 import { AuditLog } from '@ananke/audit-engine';
 import { createGatewayRoutes } from './routes.js';
 import {
+  DenyAllExecutionAuthenticator,
+  DenyAllOperatorAuthenticator,
+  DevelopmentExecutionTokenAuthenticator,
   DevelopmentTokenAuthenticator,
   OidcJwtAuthenticator,
   type OidcAuthConfig,
   type AuthenticatedOperator,
+  type ExecutionAuthenticator,
+  type ExecutionProfile,
   type OperatorAuthenticator,
   type OperatorProfile,
 } from './auth.js';
@@ -28,10 +33,7 @@ import {
   type OperatorSessionObservation,
   type OperatorSessionStore,
 } from './operator-session-store.js';
-import {
-  contentSurfaceFor,
-  type ContentPreflightAdapter,
-} from './content-preflight.js';
+import { contentSurfaceFor, type ContentPreflightAdapter } from './content-preflight.js';
 import {
   InMemoryContentApprovalStore,
   type ContentApprovalStore,
@@ -46,9 +48,14 @@ import type {
   ToolMetadata,
   Outcome,
   OperatorIdentity,
+  ExecutionIdentity,
+  ExecutionContext,
 } from '@ananke/schema';
+import { ExecutionContext as ExecutionContextSchema } from '@ananke/schema';
 
 export const DEFAULT_APPROVAL_DEV_TOKEN = 'dev-approval-token';
+export const DEFAULT_EXECUTION_DEV_TOKEN = 'dev-execution-token';
+export const DEFAULT_POLICY_VERSION = 'builtin:0.1.0';
 
 export interface OperatorAuthConfig {
   mode?: 'development' | 'oidc';
@@ -73,10 +80,16 @@ export interface ContentPreflightGatewayConfig {
   approvalTtlMs?: number;
 }
 
+export interface ExecutionAuthConfig {
+  tokens?: Record<string, ExecutionProfile>;
+  authenticator?: ExecutionAuthenticator;
+}
+
 export interface GatewayExecutionOptions {
   approvalId?: string;
   contentAccess?: ContentAccessRequest;
   contentApprovalId?: string;
+  executionContext?: ExecutionContext;
 }
 
 export interface GatewayConfig {
@@ -84,6 +97,13 @@ export interface GatewayConfig {
   mcpServers?: { name: string; url: string }[];
   audit?: IAuditLog;
   operatorAuth?: OperatorAuthConfig;
+  executionAuth?: ExecutionAuthConfig;
+  /** Enables bundled, known local credentials. Never enable outside local development. */
+  developmentMode?: boolean;
+  /** Trusted identity for in-process embedding; HTTP requests never inherit it. */
+  embeddedExecutionContext?: Omit<ExecutionContext, 'policyVersion'>;
+  policyVersion?: string;
+  approvalTtlMs?: number;
   /** @deprecated Use operatorAuth. */
   approvalAuth?: OperatorAuthConfig;
   policyFile?: string;
@@ -116,7 +136,11 @@ export class Gateway {
     mcpServers: { name: string; url: string }[];
     audit: IAuditLog;
     operatorAuthenticator: OperatorAuthenticator;
+    executionAuthenticator: ExecutionAuthenticator;
     operatorSessionStore: OperatorSessionStore;
+    embeddedExecutionContext?: ExecutionContext;
+    policyVersion: string;
+    approvalTtlMs: number;
     contentPreflight: {
       enabled: boolean;
       policy: ContentPolicyEngine;
@@ -132,24 +156,54 @@ export class Gateway {
     if (!Number.isSafeInteger(contentApprovalTtlMs) || contentApprovalTtlMs < 1) {
       throw new Error('contentPreflight.approvalTtlMs must be a positive integer');
     }
-    const operatorAuthenticator = operatorAuth?.authenticator
-      ?? (operatorAuth?.mode === 'oidc'
+    const approvalTtlMs = config.approvalTtlMs ?? 5 * 60 * 1000;
+    if (!Number.isSafeInteger(approvalTtlMs) || approvalTtlMs < 1) {
+      throw new Error('approvalTtlMs must be a positive integer');
+    }
+    const operatorAuthenticator =
+      operatorAuth?.authenticator ??
+      (operatorAuth?.mode === 'oidc'
         ? new OidcJwtAuthenticator(requiredOidcConfig(operatorAuth.oidc))
-        : new DevelopmentTokenAuthenticator(operatorAuth?.tokens ?? {
-          [DEFAULT_APPROVAL_DEV_TOKEN]: {
-            operatorId: 'local-dashboard',
-            displayName: 'Local Dashboard',
-            sessionId: 'local-dev-session',
-            roles: ['admin'],
-          },
-        }));
+        : operatorAuth?.tokens
+          ? new DevelopmentTokenAuthenticator(operatorAuth.tokens)
+          : config.developmentMode
+            ? new DevelopmentTokenAuthenticator({
+                [DEFAULT_APPROVAL_DEV_TOKEN]: {
+                  operatorId: 'local-dashboard',
+                  displayName: 'Local Dashboard',
+                  sessionId: 'local-dev-session',
+                  roles: ['admin'],
+                },
+              })
+            : new DenyAllOperatorAuthenticator());
+    const executionAuthenticator =
+      config.executionAuth?.authenticator ??
+      (config.executionAuth?.tokens
+        ? new DevelopmentExecutionTokenAuthenticator(config.executionAuth.tokens)
+        : config.developmentMode
+          ? new DevelopmentExecutionTokenAuthenticator({
+              [DEFAULT_EXECUTION_DEV_TOKEN]: {
+                agentPrincipalId: 'local-agent',
+                tenantId: 'local-development',
+                resourceScope: 'local:*',
+                sessionId: 'local-agent-session',
+              },
+            })
+          : new DenyAllExecutionAuthenticator());
+    const policyVersion = config.policyVersion ?? DEFAULT_POLICY_VERSION;
 
     this.config = {
       port: config.port ?? 3000,
       mcpServers: config.mcpServers ?? [],
       audit: config.audit ?? new AuditLog(),
       operatorAuthenticator,
+      executionAuthenticator,
       operatorSessionStore: operatorAuth?.sessionStore ?? new InMemoryOperatorSessionStore(),
+      embeddedExecutionContext: config.embeddedExecutionContext
+        ? { ...config.embeddedExecutionContext, policyVersion }
+        : undefined,
+      policyVersion,
+      approvalTtlMs,
       contentPreflight: {
         enabled: config.contentPreflight?.enabled ?? false,
         policy: config.contentPreflight?.policy ?? new ContentPolicyEngine(),
@@ -159,11 +213,12 @@ export class Gateway {
       autoLoadPolicy: config.autoLoadPolicy ?? true,
     };
     this.audit = this.config.audit;
-    this.contentApprovals = config.contentPreflight?.approvalStore ?? new InMemoryContentApprovalStore();
+    this.contentApprovals =
+      config.contentPreflight?.approvalStore ?? new InMemoryContentApprovalStore();
 
-    const policyFile = this.config.policyFile ?? (
-      this.config.autoLoadPolicy ? discoverPolicyConfigFile() : undefined
-    );
+    const policyFile =
+      this.config.policyFile ??
+      (this.config.autoLoadPolicy ? discoverPolicyConfigFile() : undefined);
     if (policyFile) {
       const loaded = loadPolicyConfigFile(policyFile);
       this.policy.loadConfig(loaded.config);
@@ -171,11 +226,14 @@ export class Gateway {
     }
 
     // Mount routes
-    this.app.use('/api/*', cors({
-      allowHeaders: ['Authorization', 'Content-Type'],
-      allowMethods: ['GET', 'POST', 'OPTIONS'],
-      origin: '*',
-    }));
+    this.app.use(
+      '/api/*',
+      cors({
+        allowHeaders: ['Authorization', 'Content-Type'],
+        allowMethods: ['GET', 'POST', 'OPTIONS'],
+        origin: '*',
+      }),
+    );
     const routes = createGatewayRoutes(this);
     this.app.route('/api', routes);
 
@@ -203,11 +261,17 @@ export class Gateway {
     return this.contentApprovals.pending();
   }
 
-  approveContentApproval(id: string, operator: OperatorIdentity): ContentApprovalReceipt | undefined {
+  approveContentApproval(
+    id: string,
+    operator: OperatorIdentity,
+  ): ContentApprovalReceipt | undefined {
     return this.contentApprovals.approve(id, operator);
   }
 
-  rejectContentApproval(id: string, operator: OperatorIdentity): ContentApprovalReceipt | undefined {
+  rejectContentApproval(
+    id: string,
+    operator: OperatorIdentity,
+  ): ContentApprovalReceipt | undefined {
     return this.contentApprovals.reject(id, operator);
   }
 
@@ -231,11 +295,33 @@ export class Gateway {
 
     if (observation.transition === 'started' || observation.transition === 'rotated') {
       this.audit.recordOperatorSessionEvent(
-        observation.transition === 'started' ? 'OPERATOR_SESSION_STARTED' : 'OPERATOR_SESSION_ROTATED',
+        observation.transition === 'started'
+          ? 'OPERATOR_SESSION_STARTED'
+          : 'OPERATOR_SESSION_ROTATED',
         sessionAuditMetadata(observation.session!),
       );
     }
     return operator;
+  }
+
+  async authenticateExecution(
+    authorizationHeader?: string,
+  ): Promise<ExecutionIdentity | undefined> {
+    try {
+      return await this.config.executionAuthenticator.authenticate(authorizationHeader);
+    } catch {
+      return undefined;
+    }
+  }
+
+  executionContextFor(identity: ExecutionIdentity): ExecutionContext {
+    return {
+      agentPrincipalId: identity.agentPrincipalId,
+      tenantId: identity.tenantId,
+      resourceScope: identity.resourceScope,
+      sessionId: identity.sessionId,
+      policyVersion: this.config.policyVersion,
+    };
   }
 
   revokeOperatorSession(operator: OperatorIdentity): OperatorSession | undefined {
@@ -245,7 +331,10 @@ export class Gateway {
       'operator_logout',
     );
     if (session) {
-      this.audit.recordOperatorSessionEvent('OPERATOR_SESSION_REVOKED', sessionAuditMetadata(session));
+      this.audit.recordOperatorSessionEvent(
+        'OPERATOR_SESSION_REVOKED',
+        sessionAuditMetadata(session),
+      );
     }
     return session;
   }
@@ -260,13 +349,30 @@ export class Gateway {
     options?: GatewayExecutionOptions,
   ): Promise<{ outcome: Outcome; approvalRequired?: boolean; approvalGrantId?: string }> {
     const startTime = performance.now();
+    const parsedContext = ExecutionContextSchema.safeParse(
+      options?.executionContext ?? this.config.embeddedExecutionContext,
+    );
+    if (!parsedContext.success || parsedContext.data.policyVersion !== this.config.policyVersion) {
+      return {
+        outcome: {
+          state: 'DENIED',
+          reasonCode: 'PERMISSION_DENIED',
+          retryable: false,
+          requiresUser: false,
+          safeToContinue: false,
+          nextAction: 'Authenticate the execution principal and provide a valid execution context.',
+        },
+      };
+    }
+    const executionContext = parsedContext.data;
+
+    const metadata = this.registry.get(toolName);
 
     // 1. Audit: tool call requested
-    this.audit.recordToolCallRequested(toolName, args);
+    this.audit.recordToolCallRequested(toolName, args, metadata?.server);
 
     // 2. Classify risk
     const riskClass = this.classifier.classify(toolName);
-    const metadata = this.registry.get(toolName);
 
     // 3. Evaluate policy
     const decision = this.policy.evaluate(toolName, riskClass);
@@ -286,8 +392,22 @@ export class Gateway {
     if (decision === 'REQUIRE_APPROVAL') {
       // If no approvalId provided, request one
       if (!options?.approvalId) {
-        const { grant } = this.approvals.requestApproval(toolName, args);
-        this.audit.recordApprovalRequested(toolName, grant.canonicalHash, args);
+        if (!metadata) {
+          const outcome = classifyOutcome(
+            { success: false, error: 'Unknown tool', durationMs: 0 },
+            'DENY',
+          );
+          this.audit.recordOutcomeGenerated(toolName, outcome);
+          return { outcome };
+        }
+        const { grant } = this.approvals.requestApproval(
+          metadata.server,
+          toolName,
+          args,
+          executionContext,
+          new Date(Date.now() + this.config.approvalTtlMs).toISOString(),
+        );
+        this.audit.recordApprovalRequested(toolName, grant.actionHash, args);
         return {
           outcome: {
             state: 'WAITING_FOR_APPROVAL',
@@ -303,7 +423,13 @@ export class Gateway {
       }
 
       // Verify approval
-      const check = this.approvals.checkApproval(options.approvalId, args);
+      const check = this.approvals.checkApproval(
+        options.approvalId,
+        metadata?.server ?? '',
+        toolName,
+        args,
+        executionContext,
+      );
       if (!check.valid) {
         if (check.reason === 'Approval pending') {
           const grant = this.approvals.get(options.approvalId);
@@ -326,19 +452,29 @@ export class Gateway {
             { success: false, error: 'Approval rejected', durationMs: 0 },
             'DENY',
           );
-          this.audit.recordApprovalDenied(toolName, options.approvalId);
+          this.audit.recordApprovalDenied(
+            toolName,
+            this.approvals.get(options.approvalId)?.actionHash ??
+              hashCanonicalCall({ approvalId: options.approvalId }),
+          );
           this.audit.recordOutcomeGenerated(toolName, outcome);
           return { outcome };
         }
 
-        this.audit.recordApprovalInvalidated(toolName, options.approvalId);
-        const outcome = classifyOutcome(
-          { success: false, error: check.reason, errorCode: 'APPROVAL_HASH_MISMATCH', durationMs: 0 },
+        this.audit.recordApprovalInvalidated(
+          toolName,
+          this.approvals.get(options.approvalId)?.actionHash ??
+            hashCanonicalCall({ approvalId: options.approvalId }),
         );
+        const outcome = classifyOutcome({
+          success: false,
+          error: check.reason,
+          errorCode: 'APPROVAL_HASH_MISMATCH',
+          durationMs: 0,
+        });
         this.audit.recordOutcomeGenerated(toolName, outcome);
         return { outcome };
       }
-
     }
 
     // 6. Execute
@@ -356,8 +492,8 @@ export class Gateway {
 
     const result = await executeTool(toolName, args, executor);
     const outcome = result.success
-      ? await this.preflightReadResult(toolName, args, result.data, metadata, options)
-        ?? classifyOutcome(result)
+      ? ((await this.preflightReadResult(toolName, args, result.data, metadata, options)) ??
+        classifyOutcome(result))
       : classifyOutcome(result);
 
     // 7. Audit
@@ -375,9 +511,7 @@ export class Gateway {
 
     const totalMs = Math.round(performance.now() - startTime);
     if (metadata) {
-      console.log(
-        `[ananke] ${toolName} → ${outcome.state} (${totalMs}ms)`,
-      );
+      console.log(`[ananke] ${toolName} → ${outcome.state} (${totalMs}ms)`);
     }
 
     return { outcome };
@@ -425,7 +559,10 @@ export class Gateway {
         data,
         request: options.contentAccess,
       });
-      this.audit.recordContentPreflighted(toolName, contentObservationAuditMetadata(preflight.observation));
+      this.audit.recordContentPreflighted(
+        toolName,
+        contentObservationAuditMetadata(preflight.observation),
+      );
 
       const decision = this.config.contentPreflight.policy.evaluate(
         preflight.observation,
@@ -434,11 +571,7 @@ export class Gateway {
       this.audit.recordContentAccessDecided(toolName, contentDecisionAuditMetadata(decision));
 
       if (decision.action === 'REQUIRE_APPROVAL') {
-        const receipt = this.resolveContentApproval(
-          toolName,
-          decision,
-          options.contentApprovalId,
-        );
+        const receipt = this.resolveContentApproval(toolName, decision, options.contentApprovalId);
         if (receipt instanceof Object && 'outcome' in receipt) {
           return receipt.outcome;
         }
@@ -460,7 +593,9 @@ export class Gateway {
           return this.contentDeniedOutcome(
             toolName,
             'CONTENT_UNSUPPORTED',
-            'The preflight adapter cannot render the approved ' + approvedDecision.grantedExposure + ' surface.',
+            'The preflight adapter cannot render the approved ' +
+              approvedDecision.grantedExposure +
+              ' surface.',
             approvedDecision,
           );
         }
@@ -478,7 +613,9 @@ export class Gateway {
         return this.contentDeniedOutcome(
           toolName,
           'CONTENT_UNSUPPORTED',
-          'The preflight adapter cannot render the granted ' + decision.grantedExposure + ' surface.',
+          'The preflight adapter cannot render the granted ' +
+            decision.grantedExposure +
+            ' surface.',
           decision,
         );
       }
@@ -494,11 +631,12 @@ export class Gateway {
   }
 
   private contentDecisionDeniedOutcome(decision: ContentAccessDecision): Outcome {
-    const nextAction = decision.action === 'REQUIRE_APPROVAL'
-      ? 'Content approval is required, but no content approval store is configured yet. Raw output was withheld.'
-      : decision.action === 'QUARANTINE'
-        ? 'Content is quarantined. Inspect it only through an isolated review workflow.'
-        : 'Content exposure was denied. Raw output was withheld.';
+    const nextAction =
+      decision.action === 'REQUIRE_APPROVAL'
+        ? 'Content approval is required, but no content approval store is configured yet. Raw output was withheld.'
+        : decision.action === 'QUARANTINE'
+          ? 'Content is quarantined. Inspect it only through an isolated review workflow.'
+          : 'Content exposure was denied. Raw output was withheld.';
     return {
       state: 'DENIED',
       reasonCode: decision.reasonCode as Exclude<ContentAccessReasonCode, 'CONTENT_ACCESS_ALLOWED'>,
@@ -555,9 +693,10 @@ export class Gateway {
       };
     }
 
-    const reasonCode = check.reason === 'Content approval expired'
-      ? 'CONTENT_RECEIPT_STALE'
-      : 'CONTENT_APPROVAL_INVALIDATED';
+    const reasonCode =
+      check.reason === 'Content approval expired'
+        ? 'CONTENT_RECEIPT_STALE'
+        : 'CONTENT_APPROVAL_INVALIDATED';
     this.audit.recordContentApprovalEvent(
       'CONTENT_APPROVAL_INVALIDATED',
       toolName,
@@ -607,15 +746,17 @@ export class Gateway {
   ): Outcome {
     return {
       state: 'COMPLETED',
-      reasonCode: decision.reasonCode === 'CONTENT_ACCESS_ALLOWED'
-        ? undefined
-        : decision.reasonCode as Exclude<ContentAccessReasonCode, 'CONTENT_ACCESS_ALLOWED'>,
+      reasonCode:
+        decision.reasonCode === 'CONTENT_ACCESS_ALLOWED'
+          ? undefined
+          : (decision.reasonCode as Exclude<ContentAccessReasonCode, 'CONTENT_ACCESS_ALLOWED'>),
       retryable: false,
       requiresUser: false,
       safeToContinue: true,
-      nextAction: decision.reasonCode === 'CONTENT_EXPOSURE_DOWNGRADED'
-        ? 'Continue only with the granted lower exposure level.'
-        : undefined,
+      nextAction:
+        decision.reasonCode === 'CONTENT_EXPOSURE_DOWNGRADED'
+          ? 'Continue only with the granted lower exposure level.'
+          : undefined,
       data: {
         content: surface,
         contentAccess: decision,
@@ -668,7 +809,9 @@ function sessionAuditMetadata(session: OperatorSession): Record<string, unknown>
   };
 }
 
-function contentObservationAuditMetadata(observation: ContentSurfaceObservation): Record<string, unknown> {
+function contentObservationAuditMetadata(
+  observation: ContentSurfaceObservation,
+): Record<string, unknown> {
   return {
     observationId: observation.observationId,
     contentHash: observation.contentHash,
@@ -724,11 +867,16 @@ function contentApprovalAuditMetadata(receipt: ContentApprovalReceipt): Record<s
 }
 
 export {
+  DenyAllExecutionAuthenticator,
+  DenyAllOperatorAuthenticator,
+  DevelopmentExecutionTokenAuthenticator,
   DevelopmentTokenAuthenticator,
   OidcJwtAuthenticator,
   hasOperatorPermission,
   permissionsForOperator,
   type AuthenticatedOperator,
+  type ExecutionAuthenticator,
+  type ExecutionProfile,
   type OidcAuthConfig,
   type OperatorAuthenticator,
   type OperatorPermission,

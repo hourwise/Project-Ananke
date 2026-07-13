@@ -21,13 +21,23 @@ interface AuditEvent {
 
 interface Approval {
   id: string;
+  serverName: string;
   toolName: string;
   riskClass: string;
-  canonicalHash: string;
+  actionHash: string;
+  bindingHash?: string;
   canonicalPayload: string;
   arguments: Record<string, unknown>;
   status: 'pending' | 'approved' | 'rejected';
   requestedAt: string;
+  expiresAt: string;
+  executionContext: {
+    agentPrincipalId: string;
+    tenantId: string;
+    resourceScope: string;
+    sessionId: string;
+    policyVersion: string;
+  };
   approvedBy?: string;
   approvedAt?: string;
   rejectedBy?: string;
@@ -62,7 +72,7 @@ interface Operator {
 }
 
 const API = 'http://localhost:3000/api';
-const INITIAL_OPERATOR_TOKEN = sessionStorage.getItem('ananke.operatorToken') ?? 'dev-approval-token';
+const INITIAL_OPERATOR_TOKEN = sessionStorage.getItem('ananke.operatorToken') ?? '';
 
 function authHeaders(token: string): HeadersInit {
   return {
@@ -92,7 +102,7 @@ function App() {
       return;
     }
 
-    const authenticatedOperator = await meResponse.json() as Operator;
+    const authenticatedOperator = (await meResponse.json()) as Operator;
     setOperator(authenticatedOperator);
     const can = (permission: string) => authenticatedOperator.permissions.includes(permission);
     setTab((current) => {
@@ -103,18 +113,22 @@ function App() {
 
     const [statsRes, auditRes, approvalsRes] = await Promise.all([
       can('stats:read') ? fetch(`${API}/stats`, { headers: authHeaders(token) }) : undefined,
-      can('audit:read') ? fetch(`${API}/audit?limit=50`, { headers: authHeaders(token) }) : undefined,
-      can('approvals:read') ? fetch(`${API}/approvals`, { headers: authHeaders(token) }) : undefined,
+      can('audit:read')
+        ? fetch(`${API}/audit?limit=50`, { headers: authHeaders(token) })
+        : undefined,
+      can('approvals:read')
+        ? fetch(`${API}/approvals`, { headers: authHeaders(token) })
+        : undefined,
     ]);
-    setStats(statsRes?.ok ? await statsRes.json() as Stats : null);
-    setAudit(auditRes?.ok ? await auditRes.json() as AuditEvent[] : []);
-    setApprovals(approvalsRes?.ok ? await approvalsRes.json() as Approval[] : []);
+    setStats(statsRes?.ok ? ((await statsRes.json()) as Stats) : null);
+    setAudit(auditRes?.ok ? ((await auditRes.json()) as AuditEvent[]) : []);
+    setApprovals(approvalsRes?.ok ? ((await approvalsRes.json()) as Approval[]) : []);
     const contentApprovalsResponse = can('approvals:read')
       ? await fetch(API + '/content-approvals', { headers: authHeaders(token) })
       : undefined;
     setContentApprovals(
       contentApprovalsResponse?.ok
-        ? await contentApprovalsResponse.json() as ContentApproval[]
+        ? ((await contentApprovalsResponse.json()) as ContentApproval[])
         : [],
     );
   }
@@ -167,7 +181,9 @@ function App() {
       return;
     }
 
-    setMessage(`Approval ${decision === 'approve' ? 'approved' : 'rejected'} by authenticated operator`);
+    setMessage(
+      `Approval ${decision === 'approve' ? 'approved' : 'rejected'} by authenticated operator`,
+    );
     await refresh();
   }
 
@@ -180,7 +196,9 @@ function App() {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-      setMessage('Content approval ' + decision + ' failed: ' + (error.error ?? response.statusText));
+      setMessage(
+        'Content approval ' + decision + ' failed: ' + (error.error ?? response.statusText),
+      );
       return;
     }
 
@@ -190,12 +208,18 @@ function App() {
 
   function statusColor(state: string): string {
     switch (state) {
-      case 'COMPLETED': return '#22c55e';
-      case 'FAILED': return '#ef4444';
-      case 'DENIED': return '#f59e0b';
-      case 'WAITING_FOR_APPROVAL': return '#38bdf8';
-      case 'APPROVAL_INVALIDATED': return '#fb7185';
-      default: return '#94a3b8';
+      case 'COMPLETED':
+        return '#22c55e';
+      case 'FAILED':
+        return '#ef4444';
+      case 'DENIED':
+        return '#f59e0b';
+      case 'WAITING_FOR_APPROVAL':
+        return '#38bdf8';
+      case 'APPROVAL_INVALIDATED':
+        return '#fb7185';
+      default:
+        return '#94a3b8';
     }
   }
 
@@ -207,7 +231,8 @@ function App() {
         </p>
         <h1 style={{ margin: '6px 0', fontSize: 36 }}>Approval Control Plane</h1>
         <p style={{ margin: 0, color: '#a7b0c0' }}>
-          The human approves readable content. The hash enforces that the approved content is exactly what executes.
+          The human approves readable content. The hash enforces that the approved content is
+          exactly what executes.
         </p>
       </header>
 
@@ -223,21 +248,35 @@ function App() {
               autoComplete="off"
             />
           </label>
-          <button style={tabBtn(true)} onClick={applyToken}>Authenticate</button>
-          {operator && <button style={tabBtn(false)} onClick={() => void logout()}>Sign out</button>}
+          <button style={tabBtn(true)} onClick={applyToken}>
+            Authenticate
+          </button>
+          {operator && (
+            <button style={tabBtn(false)} onClick={() => void logout()}>
+              Sign out
+            </button>
+          )}
         </div>
         {operator && (
           <div style={{ marginTop: 12, color: '#cbd5e1', fontSize: 13 }}>
             Signed in as <strong>{operator.displayName ?? operator.operatorId}</strong>
             {' · '}roles: {operator.roles.join(', ')}
             {' · '}session: {operator.sessionId}
-            {' · '}{operator.authMethod}
+            {' · '}
+            {operator.authMethod}
           </div>
         )}
       </section>
 
       {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: 16,
+            marginBottom: 24,
+          }}
+        >
           {[
             ['Executed', stats.executed, '#22c55e'],
             ['Failed', stats.failed, '#ef4444'],
@@ -245,8 +284,12 @@ function App() {
             ['Pending Approvals', stats.pendingApprovals, '#38bdf8'],
           ].map(([label, value, color]) => (
             <div key={label as string} style={{ ...cardStyle, borderTop: `3px solid ${color}` }}>
-              <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase' }}>{label}</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: '#f8fafc' }}>{value as number}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase' }}>
+                {label}
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 800, color: '#f8fafc' }}>
+                {value as number}
+              </div>
             </div>
           ))}
         </div>
@@ -274,15 +317,37 @@ function App() {
           )}
           {approvals.map((approval) => (
             <section key={approval.id} style={approvalCardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  flexWrap: 'wrap',
+                }}
+              >
                 <div>
-                  <div style={{ color: '#38bdf8', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>
+                  <div
+                    style={{
+                      color: '#38bdf8',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     {approval.status} approval
                   </div>
                   <h2 style={{ margin: '4px 0', color: '#f8fafc' }}>{approval.toolName}</h2>
-                  <div style={{ color: '#cbd5e1' }}>Risk class: <strong>{approval.riskClass}</strong></div>
+                  <div style={{ color: '#cbd5e1' }}>
+                    Risk class: <strong>{approval.riskClass}</strong>
+                  </div>
+                  <div style={{ color: '#cbd5e1' }}>
+                    Server: <strong>{approval.serverName}</strong>
+                  </div>
                   <div style={{ color: '#94a3b8', fontSize: 13 }}>
                     Requested: {new Date(approval.requestedAt).toLocaleString()}
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: 13 }}>
+                    Expires: {new Date(approval.expiresAt).toLocaleString()}
                   </div>
                   <div style={{ color: '#94a3b8', fontSize: 13 }}>
                     Approving session: {operator?.sessionId}
@@ -310,13 +375,23 @@ function App() {
               </div>
 
               <div style={fieldGridStyle}>
-                <PayloadBlock title="Human-readable arguments" value={JSON.stringify(approval.arguments, null, 2)} />
+                <PayloadBlock
+                  title="Human-readable arguments"
+                  value={JSON.stringify(approval.arguments, null, 2)}
+                />
                 <PayloadBlock title="Canonical payload preview" value={approval.canonicalPayload} />
               </div>
 
               <div style={{ marginTop: 12 }}>
+                <PayloadBlock
+                  title="Bound execution context"
+                  value={JSON.stringify(approval.executionContext, null, 2)}
+                />
+              </div>
+
+              <div style={{ marginTop: 12 }}>
                 <div style={labelStyle}>Hash</div>
-                <code style={hashStyle}>{approval.canonicalHash}</code>
+                <code style={hashStyle}>{approval.bindingHash ?? approval.actionHash}</code>
               </div>
             </section>
           ))}
@@ -324,13 +399,28 @@ function App() {
             <div style={{ marginTop: 30 }}>
               <h2 style={{ color: '#f8fafc', marginBottom: 8 }}>Content exposure approvals</h2>
               <p style={{ marginTop: 0, color: '#94a3b8' }}>
-                Approval releases the exact scanned content only to the bound destination and purpose.
+                Approval releases the exact scanned content only to the bound destination and
+                purpose.
               </p>
               {contentApprovals.map((approval) => (
                 <section key={approval.id} style={approvalCardStyle}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 16,
+                      flexWrap: 'wrap',
+                    }}
+                  >
                     <div>
-                      <div style={{ color: '#c084fc', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>
+                      <div
+                        style={{
+                          color: '#c084fc',
+                          fontSize: 12,
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                        }}
+                      >
                         {approval.status} content exposure
                       </div>
                       <h2 style={{ margin: '4px 0', color: '#f8fafc' }}>{approval.toolName}</h2>
@@ -360,12 +450,22 @@ function App() {
                   </div>
 
                   <div style={fieldGridStyle}>
-                    <PayloadBlock title="Destination" value={JSON.stringify(approval.binding.destination, null, 2)} />
-                    <PayloadBlock title="Purpose and selection" value={JSON.stringify({
-                      purpose: approval.binding.purpose,
-                      selection: approval.binding.selection,
-                      policyVersion: approval.binding.policyVersion,
-                    }, null, 2)} />
+                    <PayloadBlock
+                      title="Destination"
+                      value={JSON.stringify(approval.binding.destination, null, 2)}
+                    />
+                    <PayloadBlock
+                      title="Purpose and selection"
+                      value={JSON.stringify(
+                        {
+                          purpose: approval.binding.purpose,
+                          selection: approval.binding.selection,
+                          policyVersion: approval.binding.policyVersion,
+                        },
+                        null,
+                        2,
+                      )}
+                    />
                   </div>
 
                   <div style={{ marginTop: 12 }}>
@@ -387,7 +487,12 @@ function App() {
         <div>
           {audit.map((event) => (
             <div key={event.id} style={rowStyle}>
-              <span style={{ color: statusColor(event.outcome?.state ?? event.policyDecision ?? ''), fontWeight: 700 }}>
+              <span
+                style={{
+                  color: statusColor(event.outcome?.state ?? event.policyDecision ?? ''),
+                  fontWeight: 700,
+                }}
+              >
                 {event.eventType}
               </span>
               <span style={{ color: '#cbd5e1' }}>{event.toolName}</span>
@@ -396,11 +501,16 @@ function App() {
               </span>
               {event.outcome && (
                 <span style={{ fontSize: 12, color: '#a7b0c0' }}>
-                  {event.outcome.state} {event.outcome.reasonCode ? `(${event.outcome.reasonCode})` : ''}
+                  {event.outcome.state}{' '}
+                  {event.outcome.reasonCode ? `(${event.outcome.reasonCode})` : ''}
                 </span>
               )}
-              {event.policyDecision && <span style={{ fontSize: 12, color: '#a7b0c0' }}>{event.policyDecision}</span>}
-              {event.durationMs != null && <span style={{ fontSize: 12, color: '#94a3b8' }}>{event.durationMs}ms</span>}
+              {event.policyDecision && (
+                <span style={{ fontSize: 12, color: '#a7b0c0' }}>{event.policyDecision}</span>
+              )}
+              {event.durationMs != null && (
+                <span style={{ fontSize: 12, color: '#94a3b8' }}>{event.durationMs}ms</span>
+              )}
             </div>
           ))}
         </div>

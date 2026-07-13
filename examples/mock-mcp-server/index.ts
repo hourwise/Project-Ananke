@@ -7,7 +7,16 @@
 import { Gateway } from '../../packages/runtime-core/src/index.js';
 import { MOCK_TOOLS } from '../../packages/testbench/src/mock-server.js';
 
-const gateway = new Gateway({ port: 3000 });
+const gateway = new Gateway({
+  port: 3000,
+  developmentMode: true,
+  embeddedExecutionContext: {
+    agentPrincipalId: 'mock-server',
+    tenantId: 'local-demo',
+    resourceScope: 'mock:*',
+    sessionId: 'mock-server-session',
+  },
+});
 
 // Register mock tools with risk metadata
 gateway.registerTool({
