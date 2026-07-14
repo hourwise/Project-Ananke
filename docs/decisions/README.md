@@ -18,6 +18,7 @@ This index groups the repository's architecture decision records by current stat
 | ADR | Status | Summary |
 |---|---|---|
 | [ADR-0030 Information-Flow Control](../ADR-0030-INFORMATION-FLOW-CONTROL.md) | Proposed for future work | Future governance layer for content-sensitive reads and information flow |
+| [ADR-XXXX Dual-Principal MCP Delegation And Compatibility](../ADR-XXXX-dual-principal-mcp-delegation-and-compatibility.md) | Proposed for ecosystem integration | Dual-principal identity, scoped delegation, compatibility admission, credential brokering, and replay-safe execution |
 
 ## How To Read The ADR Set
 

@@ -108,3 +108,4 @@ Important current limitations:
 - [docs/ADR-0029-CHOKEPOINT-ENFORCEMENT.md](../ADR-0029-CHOKEPOINT-ENFORCEMENT.md)
 - [docs/ADR-0031-APPROVAL-UI-SECURITY.md](../ADR-0031-APPROVAL-UI-SECURITY.md)
 - [docs/ADR-0032-CANONICAL-PAYLOAD-HASHING.md](../ADR-0032-CANONICAL-PAYLOAD-HASHING.md)
+- [docs/ADR-XXXX-dual-principal-mcp-delegation-and-compatibility.md](../ADR-XXXX-dual-principal-mcp-delegation-and-compatibility.md)

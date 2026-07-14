@@ -234,6 +234,7 @@ Solid Phase 1 prototype. 108 tests pass across 13 test files. All must-pass safe
 | [ADR-0032 Canonical Payload Hashing](docs/ADR-0032-CANONICAL-PAYLOAD-HASHING.md) | Decision record for hash-bound payload approval |
 | [ADR-0033 Frictionless Validation And Ecosystem Compatibility](docs/ADR-0033-FRICTIONLESS-VALIDATION-AND-ECOSYSTEM-COMPATIBILITY.md) | Decision record for validation reports and ecosystem compatibility |
 | [ADR-XXXX Content Preflight Policy Enforcement](docs/ADR-XXXX-ananke-content-preflight-policy-enforcement.md) | Decision record for content exposure policy and preflight observations |
+| [ADR-XXXX Dual-Principal MCP Delegation And Compatibility](docs/ADR-XXXX-dual-principal-mcp-delegation-and-compatibility.md) | Proposed dual-principal MCP delegation and cross-runtime compatibility |
 
 ---
 
