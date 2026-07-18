@@ -56,12 +56,14 @@ export class AuditLog implements IAuditLog {
     toolName: string,
     args: Record<string, unknown>,
     serverName?: string,
+    metadata?: Record<string, unknown>,
   ): AuditEvent {
     return this.record({
       eventType: 'TOOL_CALL_REQUESTED',
       toolName,
       serverName,
       arguments: args,
+      metadata,
     });
   }
 
@@ -77,12 +79,14 @@ export class AuditLog implements IAuditLog {
     toolName: string,
     approvalHash: string,
     args: Record<string, unknown>,
+    metadata?: Record<string, unknown>,
   ): AuditEvent {
     return this.record({
       eventType: 'APPROVAL_REQUESTED',
       toolName,
       approvalHash,
       arguments: args,
+      metadata,
     });
   }
 

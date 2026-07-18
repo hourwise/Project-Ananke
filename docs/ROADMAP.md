@@ -63,7 +63,7 @@ Phase 1 governs whether a tool call may execute and whether a side effect is aut
 
 ## Ecosystem Build Plan
 
-Ananke is part of a broader ecosystem with [Project Mnemosyne](https://github.com/hourwise/Project-Mnemosyne) and [Project Runtime Contracts](https://github.com/hourwise/project-runtime-contracts).
+Ananke is part of a broader ecosystem with [Project Mnemosyne](https://github.com/hourwise/Project-Mnemosyne) and [Project Adrasteia](https://github.com/hourwise/Project-Adrasteia).
 
 ### Ecosystem Phase 1: Ananke Validation Surface
 

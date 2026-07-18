@@ -11,9 +11,18 @@ const gateway = new Gateway({
   port: 3000,
   developmentMode: true,
   embeddedExecutionContext: {
-    agentPrincipalId: 'mock-server',
+    authenticatedPrincipal: { id: 'mock-server-host', kind: 'service', tenantId: 'local-demo' },
+    actingPrincipal: { id: 'mock-server', kind: 'agent', tenantId: 'local-demo' },
+    runtimeId: 'ananke',
+    runtimeInstanceId: 'mock-server-runtime',
     tenantId: 'local-demo',
-    resourceScope: 'mock:*',
+    resourceScope: {
+      mode: 'bounded',
+      tenantId: 'local-demo',
+      resourceType: 'mock',
+      resourceIds: ['mock-tools'],
+      operations: ['execute'],
+    },
     sessionId: 'mock-server-session',
   },
 });

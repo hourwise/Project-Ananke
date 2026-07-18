@@ -10,6 +10,20 @@ export interface ApprovalAction {
 }
 
 /**
+ * The per-attempt request and causation identifiers are observational. They
+ * deliberately do not participate in action approval binding so an approved
+ * retry can receive a fresh requestId. A stable actionId, when supplied, is
+ * authority-relevant and remains bound.
+ */
+export function authorityRelevantExecutionContext(executionContext: ExecutionContext): unknown {
+  const { correlation, ...stableContext } = executionContext;
+  return {
+    ...stableContext,
+    ...(correlation.actionId ? { correlation: { actionId: correlation.actionId } } : {}),
+  };
+}
+
+/**
  * Canonical JSON serialization:
  * - Sorts all object keys alphabetically.
  * - Accepts only JSON-shaped values with no JavaScript-only semantics.
@@ -119,7 +133,14 @@ export function hashCanonicalCall(args: Record<string, unknown>): string {
 
 /** Hash every non-human attribute that defines one executable action. */
 export function hashApprovalAction(action: ApprovalAction): string {
-  return createHash('sha256').update(canonicalJson(action)).digest('hex');
+  return createHash('sha256')
+    .update(
+      canonicalJson({
+        ...action,
+        executionContext: authorityRelevantExecutionContext(action.executionContext),
+      }),
+    )
+    .digest('hex');
 }
 
 /** Add the authenticated human principal and session to the action binding. */

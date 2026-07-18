@@ -12,6 +12,14 @@ import {
   type OperatorIdentity,
   type OperatorRole as OperatorRoleType,
 } from '@ananke/schema';
+import {
+  toActingAgentPrincipal,
+  toAuthenticatedPrincipal,
+  toResourceScope,
+  type ActingAgentPrincipal,
+  type AuthenticatedPrincipal,
+  type ResourceScope,
+} from '@ananke/adrasteia-adapter';
 
 export type OperatorPermission =
   'approvals:read' | 'approvals:decide' | 'audit:read' | 'stats:read';
@@ -45,9 +53,13 @@ export interface OperatorAuthenticator {
 }
 
 export interface ExecutionProfile {
-  agentPrincipalId: string;
-  tenantId: string;
-  resourceScope: string;
+  authenticatedPrincipal: AuthenticatedPrincipal;
+  actingPrincipal: ActingAgentPrincipal;
+  representedPrincipal?: ExecutionIdentity['representedPrincipal'];
+  tenantId?: string;
+  projectId?: string;
+  workspaceId?: string;
+  resourceScope: ResourceScope;
   sessionId?: string;
 }
 
@@ -140,14 +152,33 @@ export class DevelopmentExecutionTokenAuthenticator implements ExecutionAuthenti
     if (!entry) return undefined;
 
     const profile = entry[1];
-    return {
-      agentPrincipalId: profile.agentPrincipalId,
-      tenantId: profile.tenantId,
-      resourceScope: profile.resourceScope,
-      sessionId: profile.sessionId ?? crypto.randomUUID(),
-      authMethod: 'dev-token',
-      authenticatedAt: new Date().toISOString(),
-    };
+    try {
+      const authenticatedPrincipal = toAuthenticatedPrincipal(profile.authenticatedPrincipal);
+      const actingPrincipal = toActingAgentPrincipal(profile.actingPrincipal);
+      const resourceScope = toResourceScope(profile.resourceScope);
+      const tenantIds = [
+        profile.tenantId,
+        authenticatedPrincipal.tenantId,
+        actingPrincipal.tenantId,
+        profile.representedPrincipal?.tenantId,
+        resourceScope.tenantId,
+      ].filter((tenant): tenant is string => Boolean(tenant));
+      if (new Set(tenantIds).size > 1) return undefined;
+      return {
+        authenticatedPrincipal,
+        actingPrincipal,
+        ...(profile.representedPrincipal ? { representedPrincipal: profile.representedPrincipal } : {}),
+        ...(profile.tenantId ? { tenantId: profile.tenantId } : {}),
+        ...(profile.projectId ? { projectId: profile.projectId } : {}),
+        ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}),
+        resourceScope,
+        sessionId: profile.sessionId ?? crypto.randomUUID(),
+        authMethod: 'dev-token',
+        authenticatedAt: new Date().toISOString(),
+      };
+    } catch {
+      return undefined;
+    }
   }
 }
 

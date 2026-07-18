@@ -60,7 +60,11 @@ function safeExec(command: string, args: string[], fallback: string): string {
 }
 
 function currentCommitSha(): string {
-  return process.env.GITHUB_SHA ?? safeExec('git', ['rev-parse', '--short=12', 'HEAD'], 'unknown');
+  return process.env.GITHUB_SHA ?? safeExec(
+    'git',
+    ['-c', `safe.directory=${process.cwd().replace(/\\/g, '/')}`, 'rev-parse', '--short=12', 'HEAD'],
+    'unknown',
+  );
 }
 
 function npmVersion(): string {

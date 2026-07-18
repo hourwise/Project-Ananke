@@ -19,6 +19,7 @@ function approvalResponse(
   const tool = gateway.registry.get(approval.toolName);
   return {
     ...approval,
+    approvalReference: gateway.approvalReference(approval.id),
     riskClass: tool?.riskClass ?? 'UNKNOWN',
     canonicalPayload: canonicalJson(approval.arguments),
   };
@@ -90,6 +91,28 @@ function contentApprovalMetadata(
 export function createGatewayRoutes(gateway: Gateway): Hono {
   const router = new Hono();
 
+  // Runtime inspection is intentionally public: every response is a
+  // descriptive, schema-validated snapshot and contains no credentials,
+  // operator identities, policy contents, or host paths.
+  router.get('/runtime/identity', (c) => c.json(gateway.runtimeIdentity()));
+  router.get('/runtime/registration', (c) => c.json(gateway.runtimeRegistration()));
+  router.get('/runtime/health', (c) => c.json(gateway.runtimeHealth()));
+  router.get('/runtime/readiness', (c) => c.json(gateway.runtimeReadiness()));
+  router.get('/runtime/compatibility', (c) => c.json(gateway.runtimeCompatibility()));
+  router.post('/runtime/negotiate', async (c) => {
+    const body = await c.req.json<{
+      protocolVersion?: unknown;
+      minimumProtocolVersion?: unknown;
+    }>();
+    if (typeof body.protocolVersion !== 'string' || typeof body.minimumProtocolVersion !== 'string') {
+      return c.json(
+        { compatible: false, reason: 'malformed_version', details: 'Both protocol versions are required.' },
+        400,
+      );
+    }
+    return c.json(gateway.negotiateProtocol(body.protocolVersion, body.minimumProtocolVersion));
+  });
+
   // ── Tools ────────────────────────────────────────────────
 
   router.get('/tools', (c) => {
@@ -116,12 +139,26 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       approvalId?: string;
       contentAccess?: ContentAccessRequest;
       contentApprovalId?: string;
+      purpose?: string;
     }>();
+    if (body.purpose !== undefined && (typeof body.purpose !== 'string' || !body.purpose)) {
+      return c.json({ error: 'purpose must be a non-empty string when supplied' }, 400);
+    }
+    let correlation;
+    try {
+      correlation = gateway.createCorrelation({
+        correlationId: c.req.header('x-ananke-correlation-id'),
+        causationId: c.req.header('x-ananke-causation-id'),
+        sessionId: identity.sessionId,
+      });
+    } catch {
+      return c.json({ error: 'Invalid trusted correlation headers' }, 400);
+    }
     const result = await gateway.execute(body.toolName, body.arguments, {
       approvalId: body.approvalId,
       contentAccess: body.contentAccess,
       contentApprovalId: body.contentApprovalId,
-      executionContext: gateway.executionContextFor(identity),
+      executionContext: gateway.executionContextFor(identity, correlation, body.purpose),
     });
     return c.json(result);
   });
@@ -309,7 +346,12 @@ export function createGatewayRoutes(gateway: Gateway): Hono {
       }
     }
 
-    return c.json(gateway.audit.query({ toolName, eventType: eventType?.data, since, limit }));
+    return c.json(
+      gateway
+        .audit
+        .query({ toolName, eventType: eventType?.data, since, limit })
+        .map((event) => ({ ...event, auditReference: gateway.auditReference(event.id) })),
+    );
   });
 
   // ── Health / Stats ───────────────────────────────────────

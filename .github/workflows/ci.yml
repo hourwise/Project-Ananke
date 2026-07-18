@@ -29,8 +29,14 @@ jobs:
       - name: Run environment check
         run: npm run validate:env
 
+      - name: Verify Project Adrasteia baseline
+        run: npm run verify:adrasteia-baseline
+
       - name: Build all packages
         run: npm run build
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build testbench
         run: npm run build -w @ananke/testbench
@@ -38,11 +44,20 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Run Adrasteia adapter conformance tests
+        run: npm run test:adrasteia:conformance
+
       - name: Run scenario benchmark
         run: npm run test:bench
 
       - name: Run filesystem MCP demo
         run: npm run demo:filesystem:run
+
+      - name: Smoke test standalone gateway
+        run: npm run test:gateway:smoke
+
+      - name: Check patch whitespace
+        run: git diff --check
 
       - name: Upload validation reports
         uses: actions/upload-artifact@v4

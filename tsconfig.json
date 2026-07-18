@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "./packages/adrasteia-adapter" },
     { "path": "./packages/schema" },
     { "path": "./packages/authority-engine" },
     { "path": "./packages/policy-engine" },
@@ -25,6 +26,7 @@
     "sourceMap": true,
     "isolatedModules": true,
     "paths": {
+      "@ananke/adrasteia-adapter": ["./packages/adrasteia-adapter/src/index.ts"],
       "@ananke/schema": ["./packages/schema/src/index.ts"],
       "@ananke/authority-engine": ["./packages/authority-engine/src/index.ts"],
       "@ananke/policy-engine": ["./packages/policy-engine/src/index.ts"],

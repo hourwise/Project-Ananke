@@ -173,7 +173,7 @@ Ananke is being developed as part of a small runtime ecosystem:
 
 - [Project Ananke](https://github.com/hourwise/Project-Ananke): execution governance, approval binding, auditability, and recoverable outcomes.
 - [Project Mnemosyne](https://github.com/hourwise/Project-Mnemosyne): sister project built in the same repository format and intended to run alongside Ananke.
-- [Project Runtime Contracts](https://github.com/hourwise/project-runtime-contracts): shared protocol, types, schemas, constants, and interfaces used across runtimes.
+- [Project Adrasteia](https://github.com/hourwise/Project-Adrasteia): shared protocol, types, schemas, constants, and interfaces used across runtimes.
 
 The projects are separate runtimes with complementary responsibilities. Ananke focuses on governed tool execution: policy, approval, auditability, and recoverable outcomes. Mnemosyne is expected to run alongside Ananke rather than replace it. Runtime Contracts is not a runtime; it is the contracts-only package for protocol compatibility, runtime identity, version negotiation, shared schemas, and stable interfaces.
 

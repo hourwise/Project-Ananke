@@ -1,0 +1,23 @@
+{
+  "project": "Project Adrasteia",
+  "repository": "https://github.com/hourwise/Project-Adrasteia",
+  "tag": "adrasteia-adoption-v0.4.0-protocol-1.4.0",
+  "sourceCommit": "124b6aee2629a3147739934ad5f1b45b32c8ba46",
+  "packageName": "project-runtime-contracts",
+  "packageVersion": "0.4.0",
+  "protocolVersion": "1.4.0",
+  "minimumProtocolVersion": "1.0.0",
+  "supportedProtocolRange": { "minimum": "1.0.0", "maximum": "1.4.0" },
+  "artifactFilename": "project-runtime-contracts-0.4.0.tgz",
+  "artifactSha256": "11ee062b079f74d2a4558af315c9b9b12a6aede291d409c48f038d93c416e2c2",
+  "artifactUrl": "https://github.com/hourwise/Project-Adrasteia/releases/download/adrasteia-adoption-v0.4.0-protocol-1.4.0/project-runtime-contracts-0.4.0.tgz",
+  "adoptedFamilies": ["dual-principal identity", "agent execution context", "resource scope", "correlation", "portable references", "runtime inspection", "protocol negotiation"],
+  "deferredFamilies": ["content-preflight", "credential broker", "grant verification", "persistent replay recovery"],
+  "adapterOwnership": "packages/adrasteia-adapter owns pure Ananke-to-Adrasteia mapping and structural validation; Ananke retains all policy, approval, execution, credential, and audit authority.",
+  "baselineSidecar": { "anankeResult": "adapter_required", "contentPreflightIncluded": false },
+  "verificationCommands": [
+    "git ls-remote https://github.com/hourwise/Project-Adrasteia.git adrasteia-adoption-v0.4.0-protocol-1.4.0 adrasteia-adoption-v0.4.0-protocol-1.4.0^{}",
+    "Get-FileHash -Algorithm SHA256 project-runtime-contracts-0.4.0.tgz",
+    "npm run verify:adrasteia-baseline"
+  ]
+}

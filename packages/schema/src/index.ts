@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  safeParseGovernedExecutionContext,
+  toGovernedExecutionContext,
+  type ExecutionIdentity as AdrasteiaExecutionIdentity,
+  type GovernedExecutionContext,
+} from '@ananke/adrasteia-adapter';
 
 // ── Risk Classes ──────────────────────────────────────────────
 
@@ -128,29 +134,21 @@ export const OperatorIdentity = z.object({
 
 export type OperatorIdentity = z.infer<typeof OperatorIdentity>;
 
-// Authenticated workload identity attached to every execution request.
-export const ExecutionIdentity = z.object({
-  agentPrincipalId: z.string(),
-  tenantId: z.string(),
-  resourceScope: z.string(),
-  sessionId: z.string(),
-  authMethod: z.enum(['dev-token', 'workload-token']),
-  authenticatedAt: z.string(),
-});
+/** Authenticated workload identity supplied only by an execution authenticator. */
+export type ExecutionIdentity = AdrasteiaExecutionIdentity;
 
-export type ExecutionIdentity = z.infer<typeof ExecutionIdentity>;
+/**
+ * @deprecated Use GovernedExecutionContext from @ananke/adrasteia-adapter.
+ * This compatibility alias deliberately delegates validation to the canonical
+ * Adrasteia-based adapter instead of defining a second local identity schema.
+ */
+export const ExecutionContext = {
+  parse: toGovernedExecutionContext,
+  safeParse: safeParseGovernedExecutionContext,
+};
 
-// Complete non-human side of an approval binding. The policy version is
-// assigned by the gateway, never trusted from request input.
-export const ExecutionContext = z.object({
-  agentPrincipalId: z.string(),
-  tenantId: z.string(),
-  resourceScope: z.string(),
-  sessionId: z.string(),
-  policyVersion: z.string(),
-});
-
-export type ExecutionContext = z.infer<typeof ExecutionContext>;
+/** @deprecated Use GovernedExecutionContext from @ananke/adrasteia-adapter. */
+export type ExecutionContext = GovernedExecutionContext;
 
 // ── Approval Grant ────────────────────────────────────────────
 
@@ -161,7 +159,7 @@ export const ApprovalGrant = z.object({
   actionHash: z.string(),
   bindingHash: z.string().optional(),
   arguments: z.record(z.unknown()),
-  executionContext: ExecutionContext,
+  executionContext: z.unknown(),
   status: z.enum(['pending', 'approved', 'rejected']).default('pending'),
   requestedAt: z.string(),
   approvedBy: z.string().optional(),
@@ -174,7 +172,9 @@ export const ApprovalGrant = z.object({
   used: z.boolean().default(false),
 });
 
-export type ApprovalGrant = z.infer<typeof ApprovalGrant>;
+export type ApprovalGrant = Omit<z.infer<typeof ApprovalGrant>, 'executionContext'> & {
+  executionContext: ExecutionContext;
+};
 
 // ── Audit Event ───────────────────────────────────────────────
 

@@ -13,9 +13,18 @@ import { Gateway } from '../../packages/gateway/src/index.js';
 async function main() {
   const gateway = new Gateway({
     embeddedExecutionContext: {
-      agentPrincipalId: 'email-demo',
+      authenticatedPrincipal: { id: 'email-demo-host', kind: 'service', tenantId: 'local-demo' },
+      actingPrincipal: { id: 'email-demo', kind: 'agent', tenantId: 'local-demo' },
+      runtimeId: 'ananke',
+      runtimeInstanceId: 'email-demo-runtime',
       tenantId: 'local-demo',
-      resourceScope: 'email:*',
+      resourceScope: {
+        mode: 'bounded',
+        tenantId: 'local-demo',
+        resourceType: 'email',
+        resourceIds: ['email-demo-mailbox'],
+        operations: ['read', 'send'],
+      },
       sessionId: 'email-demo-session',
     },
   });

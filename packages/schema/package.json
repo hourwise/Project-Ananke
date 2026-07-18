@@ -18,6 +18,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@ananke/adrasteia-adapter": "*",
     "zod": "^3.23.0"
   }
 }

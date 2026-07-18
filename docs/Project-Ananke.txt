@@ -9,7 +9,7 @@ NON-NEGOTIABLE RULES
 5. Clearly distinguish: implemented and tested; implemented but not integration-tested; scaffolded; designed; proposed; explicitly out of scope.
 6. Never describe proposed or scaffolded behaviour as currently working.
 7. Do not add marketing language or unsupported claims such as "secure", "production-ready", "guaranteed", "zero trust", or "enterprise-grade".
-8. Keep terminology consistent with project-runtime-contracts and accepted ecosystem terminology.
+8. Keep terminology consistent with Project Adrasteia and accepted ecosystem terminology.
 9. Use relative repository links.
 10. Mermaid diagrams may be added only when every component, relationship, and transition is supported by repository evidence or an explicit requirement in this prompt.
 11. Keep changes restricted to Markdown or plain-text documentation files and README documentation links.

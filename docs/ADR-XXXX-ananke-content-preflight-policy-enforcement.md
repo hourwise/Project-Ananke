@@ -4,7 +4,7 @@
 - **Date:** 2026-07-12
 - **Decision owners:** Project Ananke maintainers
 - **Applies to:** Project Ananke
-- **Depends on:** Project Runtime Contracts Content Surface Preflight types
+- **Depends on:** Ananke-local content-preflight types; Project Adrasteia Stage-A does not include this family
 
 ## Context
 
@@ -18,7 +18,7 @@ Ananke accepts a `ContentSurfaceObservation` and returns a `ContentAccessDecisio
 
 The scanner remains advisory. Ananke remains the authority boundary.
 
-The exact local contract, default decision table, binding fields, opt-in gateway boundary, and receipt lifecycle are documented in [Content Preflight Contract](CONTENT_PREFLIGHT_CONTRACT.md). These contracts are intended to migrate to Project Runtime Contracts after cross-runtime review.
+The exact local contract, default decision table, binding fields, opt-in gateway boundary, and receipt lifecycle are documented in [Content Preflight Contract](CONTENT_PREFLIGHT_CONTRACT.md). Any future shared contract requires a separately accepted cross-owner decision.
 
 Available exposure levels:
 

@@ -18,10 +18,13 @@
     "dev:gateway": "npm run dev -w @ananke/runtime-core",
     "dev:dashboard": "npm run dev -w @ananke/dashboard",
     "validate:env": "node scripts/environment-check.mjs",
+    "verify:adrasteia-baseline": "node scripts/verify-adrasteia-baseline.mjs",
+    "test:adrasteia:conformance": "vitest run packages/adrasteia-adapter/src/index.test.ts packages/runtime-core/src/runtime-inspection.test.ts",
     "validate:quick": "npm run validate:env && npm run build && npm run build -w @ananke/testbench && npm test && npm run test:bench && npm run demo:filesystem:run",
     "test:bench": "npm run bench -w @ananke/testbench",
     "demo:filesystem": "npm run build && npm run demo:filesystem:run",
-    "demo:filesystem:run": "npx tsx examples/filesystem-mcp-demo/index.ts"
+    "demo:filesystem:run": "npx tsx examples/filesystem-mcp-demo/index.ts",
+    "test:gateway:smoke": "node scripts/gateway-smoke.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/server-everything": "2026.1.26",
@@ -31,6 +34,7 @@
     "eslint": "^9.0.0",
     "prettier": "^3.3.0",
     "typescript": "^5.5.0",
+    "typescript-eslint": "^8.64.0",
     "vitest": "4.1.10"
   }
 }

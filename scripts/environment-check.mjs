@@ -23,7 +23,13 @@ function npmVersion() {
 }
 
 function currentCommitSha() {
-  return process.env.GITHUB_SHA ?? safeExec('git', ['rev-parse', '--short=12', 'HEAD']);
+  return process.env.GITHUB_SHA ?? safeExec('git', [
+    '-c',
+    `safe.directory=${repoRoot.replace(/\\/g, '/')}`,
+    'rev-parse',
+    '--short=12',
+    'HEAD',
+  ]);
 }
 
 function supportsRequiredNodeVersion() {

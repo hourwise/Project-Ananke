@@ -4,9 +4,9 @@
 
 ## How It Works
 
-1. An authenticated agent proposes a server/tool call with arguments.
+1. An authenticated human/service workload and distinct acting agent propose a server/tool call with arguments.
 2. If the tool requires approval, Ananke serializes the complete action into canonical JSON.
-3. Ananke hashes server identity, tool identity, canonical arguments, agent principal, tenant, resource scope, agent session, policy version, and expiry into `actionHash`.
+3. Ananke hashes server identity, tool identity, canonical arguments, authenticated principal, acting agent, represented principal when present, tenant/project/workspace, structured resource scope, purpose, agent session, policy version, stable action ID when supplied, and expiry into `actionHash`.
 4. Authenticated human principal and session are added to `bindingHash` when approval is granted.
 5. The agent retries with the `approvalId`.
 6. Ananke re-hashes the complete proposed action and verifies the human binding.
@@ -44,4 +44,6 @@ Future work should either adopt RFC 8785-compatible canonicalization or formally
 
 ## Security Property
 
-Changing any bound field invalidates approval. This includes a single byte of argument content (including whitespace inside a string), server or tool identity, either principal/session, tenant/resource scope, policy version, or expiry. Grants are bounded and one-time use.
+Changing any bound field invalidates approval. This includes a single byte of argument content (including whitespace inside a string), server or tool identity, either principal, represented principal, tenant/project/workspace, resource scope, purpose, session, policy version, stable action ID, or expiry. Grants are bounded and one-time use.
+
+`requestId` and `causationId` are per-attempt observational correlation fields and are excluded from approval binding so an approved action can be retried with a fresh request ID. A supplied stable `actionId` is authority-relevant and is bound. `correlationId` is retained for traceability but does not turn a retried action into a different approval.

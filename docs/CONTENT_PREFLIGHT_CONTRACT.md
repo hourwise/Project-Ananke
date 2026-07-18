@@ -20,7 +20,9 @@ scanner or adapter -> ContentSurfaceObservation
 
 ## Contracts
 
-The following contracts live temporarily in `@ananke/schema` and are intended to move to Project Runtime Contracts after cross-runtime review:
+The following contracts remain local to `@ananke/schema`. Project Adrasteia
+Stage-A explicitly records `contentPreflightIncluded: false`; no shared Fates
+Runtime Protocol compatibility claim exists for this family:
 
 - `ContentSurfaceObservation`: source hash, scanner identity/version, source trust, media type, size, scan status, and flags.
 - `ContentAccessRequest`: requested exposure, destination runtime/agent, purpose, and optional field/range selection.

@@ -45,7 +45,7 @@ AI Client -> Ananke Gateway -> MCP Server / Tool
 Ananke is designed to run alongside sibling ecosystem projects:
 
 - Project Mnemosyne: complementary runtime expected to run alongside Ananke.
-- Project Runtime Contracts: shared protocol, types, schemas, constants, and interfaces used across runtimes.
+- Project Adrasteia: shared protocol, types, schemas, constants, and interfaces used across runtimes.
 
 Runtime Contracts is intentionally not a runtime layer. It should not contain engines, persistence, policies, databases, or runtime behavior.
 

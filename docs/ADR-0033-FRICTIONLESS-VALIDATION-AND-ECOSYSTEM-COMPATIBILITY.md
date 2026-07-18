@@ -12,7 +12,7 @@ Current ecosystem repositories:
 
 - [Project Ananke](https://github.com/hourwise/Project-Ananke): execution governance, approval binding, auditability, and recoverable outcomes.
 - [Project Mnemosyne](https://github.com/hourwise/Project-Mnemosyne): sister project intended to run alongside Ananke in the same ecosystem.
-- [Project Runtime Contracts](https://github.com/hourwise/project-runtime-contracts): shared protocol, types, schemas, and interfaces used by Ananke, Mnemosyne, and future consumers.
+- [Project Adrasteia](https://github.com/hourwise/Project-Adrasteia): shared protocol, types, schemas, and interfaces used by Ananke, Mnemosyne, and future consumers.
 
 Runtime Contracts is intentionally contracts-only. It should contain no runtime logic, engines, databases, persistence, policies, or runtime behavior. Its job is to provide a small, stable, runtime-independent public API that independent runtimes can import to remain protocol compatible.
 

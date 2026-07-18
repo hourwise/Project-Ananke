@@ -11,6 +11,7 @@ This index groups the repository's architecture decision records by current stat
 | [ADR-0031 Approval UI Security](../ADR-0031-APPROVAL-UI-SECURITY.md) | Accepted as a Phase 1 dashboard requirement | Human approval must be tied to readable payload review plus binding data |
 | [ADR-0032 Canonical Payload Hashing](../ADR-0032-CANONICAL-PAYLOAD-HASHING.md) | Accepted for Phase 1 with limitations | Phase 1 approval binding uses SHA-256 over deterministic canonical JSON |
 | [ADR-0033 Frictionless Validation And Ecosystem Compatibility](../ADR-0033-FRICTIONLESS-VALIDATION-AND-ECOSYSTEM-COMPATIBILITY.md) | Accepted for ecosystem planning | Validation and compatibility should become first-class ecosystem features |
+| [ADR-0034 Project Adrasteia Stage-A Adoption Boundary](../ADR-0034-PROJECT-ADRASTEIA-STAGE-A-ADOPTION.md) | Accepted | Pins the Adrasteia baseline behind an Ananke-owned compatibility adapter |
 | [ADR-XXXX Content Preflight Policy Enforcement](../ADR-XXXX-ananke-content-preflight-policy-enforcement.md) | Accepted for Phase 2 opt-in read-result enforcement | Defines typed preflight evidence, exposure decisions, and one-time hash-bound approval receipts |
 
 ## Proposed

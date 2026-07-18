@@ -6,9 +6,9 @@ const SENSITIVE_METADATA_KEY =
   /^(?:content|data|error|raw|payload|body|prompt|selection|purpose|destination)$/i;
 const SECRET_METADATA_KEY =
   /secret|token|password|authorization|cookie|credential|private.?key|display.?name|email/i;
-const PRINCIPAL_METADATA_KEY = /^(?:operatorId|sessionId|agentPrincipalId|tenantId|sourceId)$/i;
+const PRINCIPAL_METADATA_KEY = /^(?:operatorId|sessionId|agentPrincipalId|authenticatedPrincipalId|actingPrincipalId|representedPrincipalId|tenantId|sourceId)$/i;
 const SAFE_STRING_METADATA_KEY =
-  /^(?:decision|authMethod|status|action|reasonCode|requestedExposure|grantedExposure|sourceTrust|mediaType|scanStatus|policyVersion|bindingHash|contentHash|approvalHash|observationId|contentApprovalReceiptId|requestedAt|expiresAt|approvedAt|rejectedAt|createdAt|lastAuthenticatedAt|revokedAt|decidedAt|revocationReason|invalidationReason|toolName|runtime|roles|operatorRoles|flags|name|version)$/i;
+  /^(?:decision|authMethod|status|action|reasonCode|requestedExposure|grantedExposure|sourceTrust|mediaType|scanStatus|policyVersion|bindingHash|contentHash|approvalHash|observationId|contentApprovalReceiptId|requestedAt|expiresAt|approvedAt|rejectedAt|createdAt|lastAuthenticatedAt|revokedAt|decidedAt|revocationReason|invalidationReason|toolName|runtime|runtimeInstanceId|requestId|correlationId|causationId|actionId|approvalId|auditId|verifiedGrantId|roles|operatorRoles|flags|name|version)$/i;
 
 function pseudonym(value: unknown): string {
   return `sha256:${createHash('sha256').update(String(value)).digest('hex')}`;

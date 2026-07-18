@@ -3,6 +3,7 @@
   "compilerOptions": { "composite": true, "outDir": "./dist", "rootDir": "./src" },
   "include": ["src"],
   "references": [
+    { "path": "../adrasteia-adapter" },
     { "path": "../schema" },
     { "path": "../authority-engine" },
     { "path": "../policy-engine" },

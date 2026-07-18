@@ -15,10 +15,28 @@ const TEST_OPERATOR = {
 };
 
 const TEST_EXECUTION_CONTEXT = {
-  agentPrincipalId: 'test-agent',
+  authenticatedPrincipal: {
+    id: 'test-agent-host',
+    kind: 'service',
+    tenantId: 'test-tenant',
+  },
+  actingPrincipal: {
+    id: 'test-agent',
+    kind: 'agent',
+    tenantId: 'test-tenant',
+  },
+  runtimeId: 'ananke',
+  runtimeInstanceId: 'test-runtime-instance',
   tenantId: 'test-tenant',
-  resourceScope: 'test:*',
+  resourceScope: {
+    mode: 'bounded',
+    tenantId: 'test-tenant',
+    resourceType: 'test',
+    resourceIds: ['test-resource'],
+    operations: ['execute'],
+  },
   sessionId: 'test-agent-session',
+  correlation: { requestId: 'request-test-1', correlationId: 'correlation-test-1' },
   policyVersion: 'builtin:0.1.0',
 };
 
@@ -203,7 +221,10 @@ describe('Gateway â€” Approval Binding (Tests 3 & 4)', () => {
 
     const reused = await gw.execute('gmail.send_email', args, {
       approvalId: requested.approvalGrantId,
-      executionContext: { ...TEST_EXECUTION_CONTEXT, agentPrincipalId: 'other-agent' },
+      executionContext: {
+        ...TEST_EXECUTION_CONTEXT,
+        actingPrincipal: { ...TEST_EXECUTION_CONTEXT.actingPrincipal, id: 'other-agent' },
+      },
     });
     expect(reused.outcome.state).toBe('APPROVAL_INVALIDATED');
   });

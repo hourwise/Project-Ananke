@@ -1,4 +1,5 @@
 import { Gateway } from '@ananke/runtime-core';
+import { PrincipalKind, ResourceScopeMode } from '@ananke/adrasteia-adapter';
 import { join } from 'node:path';
 import { MOCK_TOOLS, MUST_PASS_SCENARIOS } from './mock-server.js';
 import { createValidationReport, writeValidationReport } from './validation-report.js';
@@ -148,9 +149,26 @@ function createBenchmarkGateway(): Gateway {
   const gateway = new Gateway({
     autoLoadPolicy: false,
     embeddedExecutionContext: {
-      agentPrincipalId: 'testbench-agent',
+      authenticatedPrincipal: {
+        id: 'testbench-host',
+        kind: PrincipalKind.Service,
+        tenantId: 'testbench',
+      },
+      actingPrincipal: {
+        id: 'testbench-agent',
+        kind: PrincipalKind.Agent,
+        tenantId: 'testbench',
+      },
+      runtimeId: 'ananke',
+      runtimeInstanceId: 'testbench-runtime',
       tenantId: 'testbench',
-      resourceScope: 'testbench:*',
+      resourceScope: {
+        mode: ResourceScopeMode.Bounded,
+        tenantId: 'testbench',
+        resourceType: 'testbench',
+        resourceIds: ['benchmark-suite'],
+        operations: ['execute'],
+      },
       sessionId: 'testbench-session',
     },
   });

@@ -11,9 +11,18 @@ import { Gateway } from '../../packages/gateway/src/index.js';
 async function main() {
   const gateway = new Gateway({
     embeddedExecutionContext: {
-      agentPrincipalId: 'calendar-demo',
+      authenticatedPrincipal: { id: 'calendar-demo-host', kind: 'service', tenantId: 'local-demo' },
+      actingPrincipal: { id: 'calendar-demo', kind: 'agent', tenantId: 'local-demo' },
+      runtimeId: 'ananke',
+      runtimeInstanceId: 'calendar-demo-runtime',
       tenantId: 'local-demo',
-      resourceScope: 'calendar:*',
+      resourceScope: {
+        mode: 'bounded',
+        tenantId: 'local-demo',
+        resourceType: 'calendar',
+        resourceIds: ['calendar-demo'],
+        operations: ['read'],
+      },
       sessionId: 'calendar-demo-session',
     },
   });

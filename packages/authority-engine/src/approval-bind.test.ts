@@ -184,10 +184,20 @@ describe('Approval Store', () => {
   });
 
   const executionContext = {
-    agentPrincipalId: 'agent-1',
+    authenticatedPrincipal: { id: 'service-1', kind: 'service', tenantId: 'tenant-1' },
+    actingPrincipal: { id: 'agent-1', kind: 'agent', tenantId: 'tenant-1' },
+    runtimeId: 'ananke',
+    runtimeInstanceId: 'test-runtime',
     tenantId: 'tenant-1',
-    resourceScope: 'mail:*',
+    resourceScope: {
+      mode: 'bounded',
+      tenantId: 'tenant-1',
+      resourceType: 'mail',
+      resourceIds: ['mailbox-1'],
+      operations: ['send'],
+    },
     sessionId: 'agent-session-1',
+    correlation: { requestId: 'request-1', correlationId: 'correlation-1', actionId: 'action-1' },
     policyVersion: 'policy-v1',
   };
   const expiresAt = '2999-01-01T00:00:00.000Z';
@@ -274,9 +284,34 @@ describe('Approval Store', () => {
   it.each([
     ['server', { serverName: 'other-server' }],
     ['tool', { toolName: 'delete_email' }],
-    ['agent principal', { executionContext: { ...executionContext, agentPrincipalId: 'agent-2' } }],
+    [
+      'acting agent principal',
+      {
+        executionContext: {
+          ...executionContext,
+          actingPrincipal: { ...executionContext.actingPrincipal, id: 'agent-2' },
+        },
+      },
+    ],
+    [
+      'authenticated principal',
+      {
+        executionContext: {
+          ...executionContext,
+          authenticatedPrincipal: { ...executionContext.authenticatedPrincipal, id: 'service-2' },
+        },
+      },
+    ],
     ['tenant', { executionContext: { ...executionContext, tenantId: 'tenant-2' } }],
-    ['resource scope', { executionContext: { ...executionContext, resourceScope: 'mail:other' } }],
+    [
+      'resource scope',
+      {
+        executionContext: {
+          ...executionContext,
+          resourceScope: { ...executionContext.resourceScope, resourceIds: ['mailbox-2'] },
+        },
+      },
+    ],
     ['agent session', { executionContext: { ...executionContext, sessionId: 'agent-session-2' } }],
     ['policy version', { executionContext: { ...executionContext, policyVersion: 'policy-v2' } }],
   ])('rejects reuse for a different %s', (_label, override) => {

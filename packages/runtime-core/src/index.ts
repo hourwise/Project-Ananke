@@ -38,6 +38,27 @@ import {
   InMemoryContentApprovalStore,
   type ContentApprovalStore,
 } from './content-approval-store.js';
+import {
+  anankeRuntimeCapabilities,
+  createAnankeApprovalReference,
+  createAnankeAuditReference,
+  createAnankeCompatibilityManifest,
+  createAnankeHealth,
+  createAnankeReadiness,
+  createAnankeRegistration,
+  createAnankeRuntimeIdentity,
+  negotiateAnankeProtocol,
+  PrincipalKind,
+  ResourceScopeMode,
+  RuntimeReadinessStatus,
+  safeParseGovernedExecutionContext,
+  toCorrelationContext,
+  toGovernedExecutionContext,
+  type CorrelationContext,
+  type GovernedExecutionContext,
+  type RuntimeIdentity,
+  type RuntimeReadiness,
+} from '@ananke/adrasteia-adapter';
 import type { IAuditLog } from '@ananke/audit-engine';
 import type {
   ContentAccessDecision,
@@ -49,13 +70,15 @@ import type {
   Outcome,
   OperatorIdentity,
   ExecutionIdentity,
-  ExecutionContext,
 } from '@ananke/schema';
-import { ExecutionContext as ExecutionContextSchema } from '@ananke/schema';
 
 export const DEFAULT_APPROVAL_DEV_TOKEN = 'dev-approval-token';
 export const DEFAULT_EXECUTION_DEV_TOKEN = 'dev-execution-token';
 export const DEFAULT_POLICY_VERSION = 'builtin:0.1.0';
+export const ANANKE_RUNTIME_VERSION = '0.1.0';
+
+const RUNTIME_INSTANCE_ID = `ananke-${crypto.randomUUID()}`;
+const RUNTIME_STARTED_AT = Date.now();
 
 export interface OperatorAuthConfig {
   mode?: 'development' | 'oidc';
@@ -89,7 +112,10 @@ export interface GatewayExecutionOptions {
   approvalId?: string;
   contentAccess?: ContentAccessRequest;
   contentApprovalId?: string;
-  executionContext?: ExecutionContext;
+  /** Trusted in-process context only. HTTP callers cannot supply this value. */
+  executionContext?: GovernedExecutionContext;
+  /** Purpose is declarative and is included in Ananke approval binding when supplied. */
+  purpose?: string;
 }
 
 export interface GatewayConfig {
@@ -101,7 +127,9 @@ export interface GatewayConfig {
   /** Enables bundled, known local credentials. Never enable outside local development. */
   developmentMode?: boolean;
   /** Trusted identity for in-process embedding; HTTP requests never inherit it. */
-  embeddedExecutionContext?: Omit<ExecutionContext, 'policyVersion'>;
+  embeddedExecutionContext?: Omit<GovernedExecutionContext, 'policyVersion' | 'correlation'> & {
+    correlation?: CorrelationContext;
+  };
   policyVersion?: string;
   approvalTtlMs?: number;
   /** @deprecated Use operatorAuth. */
@@ -138,7 +166,7 @@ export class Gateway {
     operatorAuthenticator: OperatorAuthenticator;
     executionAuthenticator: ExecutionAuthenticator;
     operatorSessionStore: OperatorSessionStore;
-    embeddedExecutionContext?: ExecutionContext;
+    embeddedExecutionContext?: GovernedExecutionContext;
     policyVersion: string;
     approvalTtlMs: number;
     contentPreflight: {
@@ -148,6 +176,8 @@ export class Gateway {
     };
     policyFile?: string;
     autoLoadPolicy: boolean;
+    executionAuthenticationConfigured: boolean;
+    embeddedCorrelationProvided: boolean;
   };
 
   constructor(config: GatewayConfig = {}) {
@@ -183,9 +213,27 @@ export class Gateway {
         : config.developmentMode
           ? new DevelopmentExecutionTokenAuthenticator({
               [DEFAULT_EXECUTION_DEV_TOKEN]: {
-                agentPrincipalId: 'local-agent',
+                authenticatedPrincipal: {
+                  id: 'local-agent-host',
+                  kind: PrincipalKind.Service,
+                  issuer: 'ananke-development',
+                  tenantId: 'local-development',
+                },
+                actingPrincipal: {
+                  id: 'local-agent',
+                  kind: PrincipalKind.Agent,
+                  issuer: 'ananke-development',
+                  tenantId: 'local-development',
+                },
                 tenantId: 'local-development',
-                resourceScope: 'local:*',
+                resourceScope: {
+                  mode: ResourceScopeMode.Bounded,
+                  tenantId: 'local-development',
+                  resourceType: 'filesystem',
+                  resourceIds: ['development-workspace'],
+                  operations: ['read', 'write'],
+                  providerNamespace: 'local',
+                },
                 sessionId: 'local-agent-session',
               },
             })
@@ -200,7 +248,11 @@ export class Gateway {
       executionAuthenticator,
       operatorSessionStore: operatorAuth?.sessionStore ?? new InMemoryOperatorSessionStore(),
       embeddedExecutionContext: config.embeddedExecutionContext
-        ? { ...config.embeddedExecutionContext, policyVersion }
+        ? toGovernedExecutionContext({
+            ...config.embeddedExecutionContext,
+            policyVersion,
+            correlation: config.embeddedExecutionContext.correlation ?? this.createCorrelation(),
+          })
         : undefined,
       policyVersion,
       approvalTtlMs,
@@ -211,6 +263,10 @@ export class Gateway {
       },
       policyFile: config.policyFile,
       autoLoadPolicy: config.autoLoadPolicy ?? true,
+      executionAuthenticationConfigured:
+        Boolean(config.executionAuth?.authenticator || config.executionAuth?.tokens) ||
+        config.developmentMode === true,
+      embeddedCorrelationProvided: config.embeddedExecutionContext?.correlation !== undefined,
     };
     this.audit = this.config.audit;
     this.contentApprovals =
@@ -229,7 +285,12 @@ export class Gateway {
     this.app.use(
       '/api/*',
       cors({
-        allowHeaders: ['Authorization', 'Content-Type'],
+        allowHeaders: [
+          'Authorization',
+          'Content-Type',
+          'X-Ananke-Correlation-Id',
+          'X-Ananke-Causation-Id',
+        ],
         allowMethods: ['GET', 'POST', 'OPTIONS'],
         origin: '*',
       }),
@@ -314,14 +375,136 @@ export class Gateway {
     }
   }
 
-  executionContextFor(identity: ExecutionIdentity): ExecutionContext {
-    return {
-      agentPrincipalId: identity.agentPrincipalId,
-      tenantId: identity.tenantId,
-      resourceScope: identity.resourceScope,
+  createCorrelation(input?: Partial<Omit<CorrelationContext, 'requestId' | 'correlationId'>> & {
+    correlationId?: string;
+  }): CorrelationContext {
+    return toCorrelationContext({
+      requestId: `request-${crypto.randomUUID()}`,
+      correlationId: input?.correlationId ?? `correlation-${crypto.randomUUID()}`,
+      ...(input && Object.hasOwn(input, 'causationId') ? { causationId: input.causationId } : {}),
+      ...(input?.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input?.actionId ? { actionId: input.actionId } : {}),
+      ...(input?.workflowId ? { workflowId: input.workflowId } : {}),
+      ...(input?.executionId ? { executionId: input.executionId } : {}),
+      ...(input?.stepId ? { stepId: input.stepId } : {}),
+      ...(input?.attemptId ? { attemptId: input.attemptId } : {}),
+      ...(input?.approvalReference ? { approvalReference: input.approvalReference } : {}),
+      ...(input?.delegationReference ? { delegationReference: input.delegationReference } : {}),
+      ...(input?.auditReference ? { auditReference: input.auditReference } : {}),
+      ...(input?.stateHandleReference ? { stateHandleReference: input.stateHandleReference } : {}),
+    });
+  }
+
+  executionContextFor(
+    identity: ExecutionIdentity,
+    correlation = this.createCorrelation({ sessionId: identity.sessionId }),
+    purpose?: string,
+  ): GovernedExecutionContext {
+    return toGovernedExecutionContext({
+      authenticatedPrincipal: identity.authenticatedPrincipal,
+      actingPrincipal: identity.actingPrincipal,
+      ...(identity.representedPrincipal ? { representedPrincipal: identity.representedPrincipal } : {}),
+      runtimeId: 'ananke',
+      runtimeInstanceId: RUNTIME_INSTANCE_ID,
       sessionId: identity.sessionId,
+      ...(identity.tenantId ? { tenantId: identity.tenantId } : {}),
+      ...(identity.projectId ? { projectId: identity.projectId } : {}),
+      ...(identity.workspaceId ? { workspaceId: identity.workspaceId } : {}),
+      resourceScope: identity.resourceScope,
+      correlation,
       policyVersion: this.config.policyVersion,
-    };
+      ...(purpose ? { purpose } : {}),
+    });
+  }
+
+  runtimeIdentity(): RuntimeIdentity {
+    return createAnankeRuntimeIdentity({
+      version: ANANKE_RUNTIME_VERSION,
+      instanceId: RUNTIME_INSTANCE_ID,
+      capabilities: anankeRuntimeCapabilities,
+    });
+  }
+
+  runtimeHealth() {
+    const warnings = this.config.executionAuthenticationConfigured
+      ? []
+      : ['Execution authentication is not configured; the gateway is running fail-closed.'];
+    return createAnankeHealth({
+      uptimeMs: Date.now() - RUNTIME_STARTED_AT,
+      warnings,
+      healthy: true,
+    });
+  }
+
+  runtimeReadiness(): RuntimeReadiness {
+    const registeredToolsHaveExecutors = this.registry.list().every((tool) =>
+      this.executors.has(tool.name),
+    );
+    const dependencies: NonNullable<RuntimeReadiness['dependencies']> = [
+      { dependencyId: 'runtime-initialisation', status: RuntimeReadinessStatus.Ready, required: true },
+      { dependencyId: 'selected-policy', status: RuntimeReadinessStatus.Ready, required: true },
+      { dependencyId: 'audit-backend', status: RuntimeReadinessStatus.Ready, required: true },
+      {
+        dependencyId: 'execution-authenticator',
+        status: this.config.executionAuthenticationConfigured
+          ? RuntimeReadinessStatus.Ready
+          : RuntimeReadinessStatus.NotReady,
+        required: true,
+        message: this.config.executionAuthenticationConfigured
+          ? undefined
+          : 'No execution authenticator is configured; requests are denied.',
+      },
+      {
+        dependencyId: 'adrasteia-adapter',
+        status: RuntimeReadinessStatus.Ready,
+        required: true,
+      },
+      {
+        dependencyId: 'registered-tool-executors',
+        status: registeredToolsHaveExecutors
+          ? RuntimeReadinessStatus.Ready
+          : RuntimeReadinessStatus.NotReady,
+        required: true,
+        message: registeredToolsHaveExecutors ? undefined : 'One or more registered tools has no executor.',
+      },
+    ];
+    const ready = dependencies.every(
+      (dependency) => !dependency.required || dependency.status === RuntimeReadinessStatus.Ready,
+    );
+    return createAnankeReadiness({
+      ready,
+      reasonCode: ready ? undefined : 'REQUIRED_DEPENDENCY_UNAVAILABLE',
+      dependencies,
+    });
+  }
+
+  runtimeRegistration() {
+    return createAnankeRegistration({
+      identity: this.runtimeIdentity(),
+      health: this.runtimeHealth(),
+      readiness: this.runtimeReadiness(),
+      endpointBaseUrl: `http://localhost:${this.config.port}`,
+      capabilities: anankeRuntimeCapabilities,
+    });
+  }
+
+  runtimeCompatibility() {
+    return createAnankeCompatibilityManifest({
+      runtimeVersion: ANANKE_RUNTIME_VERSION,
+      capabilities: anankeRuntimeCapabilities,
+    });
+  }
+
+  approvalReference(approvalId: string) {
+    return createAnankeApprovalReference(approvalId, this.config.policyVersion);
+  }
+
+  auditReference(auditId: string) {
+    return createAnankeAuditReference(auditId);
+  }
+
+  negotiateProtocol(peerProtocolVersion: string, peerMinimumProtocolVersion: string) {
+    return negotiateAnankeProtocol(peerProtocolVersion, peerMinimumProtocolVersion);
   }
 
   revokeOperatorSession(operator: OperatorIdentity): OperatorSession | undefined {
@@ -349,8 +532,20 @@ export class Gateway {
     options?: GatewayExecutionOptions,
   ): Promise<{ outcome: Outcome; approvalRequired?: boolean; approvalGrantId?: string }> {
     const startTime = performance.now();
-    const parsedContext = ExecutionContextSchema.safeParse(
-      options?.executionContext ?? this.config.embeddedExecutionContext,
+    const requestedContext = options?.executionContext ?? this.config.embeddedExecutionContext;
+    const contextForAttempt =
+      !options?.executionContext &&
+      requestedContext &&
+      !this.config.embeddedCorrelationProvided
+        ? {
+            ...requestedContext,
+            correlation: this.createCorrelation({ sessionId: requestedContext.sessionId }),
+          }
+        : requestedContext;
+    const parsedContext = safeParseGovernedExecutionContext(
+      options?.purpose === undefined || !contextForAttempt
+        ? contextForAttempt
+        : { ...contextForAttempt, purpose: options.purpose },
     );
     if (!parsedContext.success || parsedContext.data.policyVersion !== this.config.policyVersion) {
       return {
@@ -369,7 +564,12 @@ export class Gateway {
     const metadata = this.registry.get(toolName);
 
     // 1. Audit: tool call requested
-    this.audit.recordToolCallRequested(toolName, args, metadata?.server);
+    this.audit.recordToolCallRequested(
+      toolName,
+      args,
+      metadata?.server,
+      auditCorrelationMetadata(executionContext, options?.approvalId),
+    );
 
     // 2. Classify risk
     const riskClass = this.classifier.classify(toolName);
@@ -407,7 +607,10 @@ export class Gateway {
           executionContext,
           new Date(Date.now() + this.config.approvalTtlMs).toISOString(),
         );
-        this.audit.recordApprovalRequested(toolName, grant.actionHash, args);
+        this.audit.recordApprovalRequested(toolName, grant.actionHash, args, {
+          ...auditCorrelationMetadata(executionContext, grant.id),
+          approvalId: grant.id,
+        });
         return {
           outcome: {
             state: 'WAITING_FOR_APPROVAL',
@@ -793,6 +996,25 @@ function requiredOidcConfig(config?: OidcAuthConfig): OidcAuthConfig {
     throw new Error('operatorAuth.oidc is required when operatorAuth.mode is "oidc"');
   }
   return config;
+}
+
+function auditCorrelationMetadata(
+  context: GovernedExecutionContext,
+  approvalId?: string,
+): Record<string, unknown> {
+  return {
+    requestId: context.correlation.requestId,
+    correlationId: context.correlation.correlationId,
+    causationId: context.correlation.causationId,
+    actionId: context.correlation.actionId,
+    approvalId,
+    runtime: context.runtimeId,
+    runtimeInstanceId: context.runtimeInstanceId,
+    sessionId: context.sessionId,
+    authenticatedPrincipalId: context.authenticatedPrincipal.id,
+    actingPrincipalId: context.actingPrincipal.id,
+    representedPrincipalId: context.representedPrincipal?.id,
+  };
 }
 
 function sessionAuditMetadata(session: OperatorSession): Record<string, unknown> {

@@ -7,6 +7,12 @@ Ananke exposes a REST API for tool execution, approvals, and audit queries.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Health check - returns `{ name, version }` |
+| `GET` | `/api/runtime/identity` | Public, schema-valid Ananke runtime identity |
+| `GET` | `/api/runtime/registration` | Public runtime registration snapshot |
+| `GET` | `/api/runtime/health` | Public operational health snapshot |
+| `GET` | `/api/runtime/readiness` | Public governed-work readiness snapshot |
+| `GET` | `/api/runtime/compatibility` | Public Project Adrasteia compatibility manifest |
+| `POST` | `/api/runtime/negotiate` | Public semantic Fates Runtime Protocol negotiation |
 | `GET` | `/api/tools` | List all registered tools with risk metadata |
 | `GET` | `/api/tools/:name` | Get a single tool's metadata |
 | `POST` | `/api/execute` | Authenticated workload execution - `{ toolName, arguments, approvalId?, contentAccess?, contentApprovalId? }` |
@@ -23,7 +29,31 @@ Ananke exposes a REST API for tool execution, approvals, and audit queries.
 
 ## Execute Response
 
-`POST /api/execute` requires a workload bearer credential. Missing or invalid credentials return `401`; caller, agent, tenant, resource, session, and policy identity are never accepted from the JSON body. Explicit local development mode provides `dev-execution-token`; production deployments must configure `executionAuth`.
+`POST /api/execute` requires a workload bearer credential. Missing or invalid credentials return `401`; authenticated workload principal, acting agent, tenant, resource scope, session, and policy identity are never accepted from the JSON body. Explicit local development mode provides `dev-execution-token`; production deployments must configure `executionAuth`.
+
+Each HTTP ingress attempt receives a new `requestId`. The authenticated boundary may
+provide `X-Ananke-Correlation-Id` and optional `X-Ananke-Causation-Id`; malformed
+values return `400`. Correlation headers are ignored from the JSON body. `requestId`
+is per-attempt and observational, `correlationId` relates work, `actionId` identifies
+a stable governed action when supplied, and an approval ID identifies an approval
+record.
+
+## Runtime Inspection
+
+Runtime inspection endpoints are public because they return only descriptive,
+schema-validated compatibility data. They never expose tokens, operator identities,
+policy contents, raw environment data, filesystem paths, or credential configuration.
+They are discovery records only and never grant authority.
+
+`POST /api/runtime/negotiate` accepts:
+
+```json
+{ "protocolVersion": "1.4.0", "minimumProtocolVersion": "1.0.0" }
+```
+
+It uses the Project Adrasteia semantic negotiation helper and returns a negotiated
+version or a stable incompatibility reason such as `malformed_version`,
+`invalid_range`, `unsupported_major`, or `no_overlap`.
 
 The `/api/execute` endpoint returns an outcome envelope:
 
@@ -123,9 +153,10 @@ See [Operator Authentication and RBAC](AUTHENTICATION_AND_RBAC.md) for OIDC conf
   "canonicalPayload": "{\"content\":\"hello\",\"path\":\"note.txt\"}",
   "actionHash": "...",
   "executionContext": {
-    "agentPrincipalId": "agent-1",
+    "authenticatedPrincipal": { "id": "workload-host", "kind": "service" },
+    "actingPrincipal": { "id": "agent-1", "kind": "agent" },
     "tenantId": "tenant-1",
-    "resourceScope": "filesystem:/workspace",
+    "resourceScope": { "mode": "bounded", "resourceIds": ["workspace-1"] },
     "sessionId": "agent-session-1",
     "policyVersion": "policy-v1"
   },

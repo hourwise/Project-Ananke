@@ -11,6 +11,7 @@
     "bench": "tsx src/runner.ts"
   },
   "dependencies": {
+    "@ananke/adrasteia-adapter": "*",
     "@ananke/schema": "*",
     "@ananke/authority-engine": "*",
     "@ananke/runtime-core": "*",

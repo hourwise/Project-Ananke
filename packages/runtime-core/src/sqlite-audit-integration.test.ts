@@ -19,9 +19,18 @@ describe('Gateway with SqliteAuditLog', () => {
     const gw = new Gateway({
       audit: sqliteAudit,
       embeddedExecutionContext: {
-        agentPrincipalId: 'test-agent',
+        authenticatedPrincipal: { id: 'test-agent-host', kind: 'service', tenantId: 'test-tenant' },
+        actingPrincipal: { id: 'test-agent', kind: 'agent', tenantId: 'test-tenant' },
+        runtimeId: 'ananke',
+        runtimeInstanceId: 'test-runtime',
         tenantId: 'test-tenant',
-        resourceScope: 'test:*',
+        resourceScope: {
+          mode: 'bounded',
+          tenantId: 'test-tenant',
+          resourceType: 'test',
+          resourceIds: ['test-resource'],
+          operations: ['read'],
+        },
         sessionId: 'test-session',
       },
     });
